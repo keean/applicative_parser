@@ -1,9 +1,9 @@
+import {Set, List} from './deps.ts';
+
 /**
  * Applicative Parser
  * @module parser
  */
-
-import {Set, List} from './deps.ts';
 
 type Left<A> = A extends [infer B, infer C] ? B : never;
 type Right<A> = A extends [infer B, infer C] ? C : never;
