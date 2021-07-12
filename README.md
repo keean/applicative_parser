@@ -21,6 +21,8 @@ to encode the GADT used in "Applicative Parsing"
 Here is an example parser for floating point numbers:
 
 ```ts
+const digit = OneOf('0123456789');
+
 function float(): Parser<number> {
     const float1 = FMap(([a,b]) => a.concat(List.of(b)), seq(many1(digit), OneOf('.')));
     const float2 = FMap(([a,b]) => a.concat(b), seq(float1, many1(digit)));
