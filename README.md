@@ -1,9 +1,16 @@
 # applicative_parser
 *Typescript applicative parser combinators (deno module)*
 
-Applicative approach to parsing has benefits compared to the monaic approach.
-This cant be done because the second argument of monadic-bind is a function,
-and hence opaque:
+The applicative approach to parsing has benefits compared to the monadic approach,
+it separates the structure of the parser from the implementation. This allows different
+implementations to be used (for example with or without backtracking, or error recovery)
+without changing the use of the application of the parser. It also allows other algorithms
+over the parser applications such as pretty-printing or symbol extraction.
+
+These features cannot be implemented with a monadic parser because the second argument of
+monadic-bind is a function, and hence opaque.
+
+Key features:
 
 - able to extract all valid symbols from parser
 - allows pretty printing

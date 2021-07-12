@@ -1,23 +1,6 @@
 /**
  * Applicative Parser
  * @module parser
- *
- * Applicative approach to parsing has benefits compared to the monaic approach.
- * This cant be done because the second argument of monadic-bind is a function,
- * and hence opaque:
- *
- * - able to extract all valid symbols from parser
- * - allows pretty printing
- * - supports multiple evaluation strategies (backtracking vs non-backtracking etc).
- * 
- * Based on "Notes on Computing", "Applicative Parsing" in ML :
- *
- * <https://jobjo.github.io/2019/05/19/applicative-parsing.html>
- *
- * Using existential encoding from "Existential Quantification in TypeScript"
- * to encode the GADT used in "Applicative Parsing"
- *
- * <https://unsafe-perform.io/posts/2020-02-21-existential-quantification-in-typescript>
  */
 
 import {Set, List} from './deps.ts';
