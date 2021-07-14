@@ -1,5 +1,5 @@
 # applicative_parser
-*Typescript applicative parser combinators (deno module)*
+*parser combinators applicative TypeScript deno module*
 
 The applicative approach to parsing has benefits compared to the monadic approach,
 it separates the structure of the parser from the implementation. This allows different
@@ -12,9 +12,10 @@ monadic-bind is a function, and hence opaque.
 
 Key features:
 
+- no external dependencies
 - able to extract all valid symbols from parser
 - allows pretty printing
-- supports multiple evaluation strategies (backtracking vs non-backtracking etc).
+- supports multiple evaluation strategies (backtracking vs non-backtracking etc)
 
 Based on "Notes on Computing", "Applicative Parsing" in ML :
 
