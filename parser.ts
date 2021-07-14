@@ -3,8 +3,6 @@
  * @module parser
  */
 
-import {Set, List} from './deps.ts';
-
 type Left<A> = A extends [infer B, infer C] ? B : never;
 type Right<A> = A extends [infer B, infer C] ? C : never;
 
@@ -152,21 +150,21 @@ export function symbols<A>(parser: Parser<A>): Set<string> {
         case 'fail':
         case 'empty':
         case 'return':
-            return Set();
+            return new Set();
         case 'forget':
             return parser.exists(p => symbols(p.forget));
         case 'oneOf':
-            return parser.exists(p => Set(Array.from(p.oneOf)));
+            return parser.exists(p => new Set(Array.from(p.oneOf)));
         case 'map':
             return parser.exists(p => symbols(p.parser));
         case 'product':
-            return parser.exists(p => Set.union([symbols(p.left), symbols(p.right)]));
+            return parser.exists(p => new Set([...symbols(p.left), ...symbols(p.right)]));
         case 'either':
-            return parser.exists(p => Set.union([symbols(p.left), symbols(p.right)]));
+            return parser.exists(p => new Set([...symbols(p.left), ...symbols(p.right)]));
         case 'fix':
             return parser.exists(p => symbols<A>(p.f(Fix(_ => Fail('')))));
         case 'raw':
-            return Set();
+            return new Set();
     }
 }
    
@@ -304,15 +302,17 @@ export function second<A, B>(fx: Parser<A>, fy: Parser<B>): Parser<B> {
     return apply(FMap((_:A) => (y:B) => y, fx), fy);
 }
 
-const listCons = <A>(t: A) => (ts: List<A>) => ts.unshift(t)
+//const listCons = <A>(t: A) => (ts: List<A>) => ts.unshift(t)
+
+const arrayCons = <A>(t: A) => (ts: A[]) => [t, ...ts]
 
 /**
  * `many` applies parser `p` zero or more times, returning an immutable list,
  * this cannot fail.
  */
 export function many<A>(p: Parser<A>) {
-    return Fix<List<A>>(many => 
-        Either(apply(FMap(listCons, p), many), Return(List()))
+    return Fix<A[]>(many => 
+        Either(apply(FMap(arrayCons, p), many), Return([]) as Parser<A[]>),
     );
 }
 
@@ -321,7 +321,7 @@ export function many<A>(p: Parser<A>) {
  * this will fail if it does not succeed at least once.
  */
 export function many1<A>(p: Parser<A>) {
-    return apply(FMap(listCons, p), many(p));
+    return apply(FMap(arrayCons, p), many(p));
 }
 
 /**
@@ -335,14 +335,14 @@ export function between<A, B, C>(ps: Parser<A>, pe: Parser<B>, p: Parser<C>): Pa
 /**
  * `spaces` succeeds if there are one or more spaces, otherwise fails
  */
-export function spaces(): Parser<List<string>> {
+export function spaces(): Parser<string[]> {
     return many1(OneOf('\n\r\t '));
 }
 
 /**
  * `optSpaces` accepts zero or more spaces, always succeeds.
  */
-export function optSpaces(): Parser<List<string>> {
+export function optSpaces(): Parser<string[]> {
     return many(OneOf('\n\r\t '));
 }
 
@@ -350,7 +350,7 @@ export function optSpaces(): Parser<List<string>> {
  * `string` matches string `s` or fails.
  */
 export function string(s: string): Parser<string> {
-    return FMap(cs => cs.join(''), Array.from(s).reduceRight((cs, c) => apply(FMap(listCons, OneOf(c)), cs), Return(List())));
+    return FMap(cs => cs.join(''), Array.from(s).reduceRight((cs, c) => apply(FMap(arrayCons, OneOf(c)), cs), Return<string[]>([])));
 }
 
 /**
@@ -378,6 +378,11 @@ function tupleCons<T>(t: T): <TS extends unknown[]>(ts: TS) => readonly [T, ...T
 // deno-lint-ignore no-explicit-any
 export function seq<T extends Parser<any>[]>(...parsers: T): RemapParsers<T> {
     return parsers.reduceRight((ps, p) => apply(FMap(tupleCons, p), ps), Return([]));
+}
+
+// deno-lint-ignore no-explicit-any
+export function seqMap<A,T extends Parser<any>[]>(map: (..._:UnwrapParsers<T>) => A, ...parsers: T): Parser<A> {
+    return FMap(x => map(...x), seq(...parsers));
 }
 
 //----------------------------------------------------------------------------
@@ -422,11 +427,9 @@ function float(): Parser<number> {
  * `float` parses a floating point number.
  */
 export function float(): Parser<number> {
-    const float1 = FMap(([a,b]) => a.concat(List.of(b)), seq(many1(digit), OneOf('.'))); 
-    const float2 = FMap(([a,b]) => a.concat(b), seq(float1, many1(digit)));
-    const float3 = FMap(([a,b,c]) => a.concat(List.of(b), c), seq(
-        choice(float2, many1(digit)), OneOf('e'), many1(digit)
-    ));
+    const float1 = seqMap((a, b) => a.concat([b]), many1(digit), OneOf('.'));
+    const float2 = seqMap((a, b) => a.concat(b), float1, many1(digit));
+    const float3 = seqMap((a, b, c) => a.concat([b], c), choice(float2, many1(digit)), OneOf('e'), many1(digit));
     return FMap(a => parseFloat(a.join('')), choice(float3, float2, float1));
 }
 
@@ -441,7 +444,7 @@ type Atom =
 
 type SExp =
     | {tag: 'atom', atom: Atom}
-    | {tag: 'list', list: List<SExp>}
+    | {tag: 'list', list: SExp[]}
         
 /**
  * `sexpr` parses an s-expression which can consist of an atom, integer,
@@ -453,7 +456,7 @@ export function sexpr(): Parser<SExp> {
     const MkString = (string: string): Atom => ({tag: 'string', string});
     const MkSymbol = (symbol: string): Atom => ({tag: 'symbol', symbol});
     const MkAtom = (atom: Atom): SExp => ({tag: 'atom', atom});
-    const MkList = (list: List<SExp>): SExp => ({tag: 'list', list}); 
+    const MkList = (list: SExp[]): SExp => ({tag: 'list', list}); 
     const leftParen = OneOf('(');
     const rightParen = OneOf(')');
     const quote = OneOf('"');

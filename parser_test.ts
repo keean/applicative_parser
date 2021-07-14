@@ -1,5 +1,4 @@
 import {assertEquals} from './test_deps.ts';
-import {List, Set} from './deps.ts';
 import {parse, Fail, Empty, OneOf, Return, FMap, Product, Either, many, many1, between, symbols, show, token, integer, float, sexpr} from './parser.ts';
 
 const empty = {cs: '', pos: 0};
@@ -101,15 +100,15 @@ Deno.test('either parser', () => {
 Deno.test('many parser', () => {
     assertEquals(
         parse(many(Either(token('a'), token('b'))))(text),
-        {...text, pos: 13, result: List(['a', 'b', 'a', 'b', 'a', 'a', 'b', 'b'])}
+        {...text, pos: 13, result: ['a', 'b', 'a', 'b', 'a', 'a', 'b', 'b']}
     );
     assertEquals(
         parse(many(token('c')))(text),
-        {...text, pos: 0, result: List([])}
+        {...text, pos: 0, result: []}
     );
     assertEquals(
         parse(many1(Either(token('a'), token('b'))))(text),
-        {...text, pos: 13, result: List(['a', 'b', 'a', 'b', 'a', 'a', 'b', 'b'])}
+        {...text, pos: 13, result: ['a', 'b', 'a', 'b', 'a', 'a', 'b', 'b']}
     );
     assertEquals(
         parse(many1(token('c')))(text),
@@ -120,7 +119,7 @@ Deno.test('many parser', () => {
 Deno.test('between parser', () => {
     assertEquals(
         parse(between(OneOf('('), OneOf(')'), many(OneOf('a'))))({cs: '(aa)', pos: 0}),
-        {cs: '(aa)', pos: 4, result: List(['a', 'a'])}
+        {cs: '(aa)', pos: 4, result: ['a', 'a']}
     );
 })
 
@@ -182,7 +181,7 @@ Deno.test('s-expr parser', () => {
         parse(sexpr())({cs: '(one (2 two) 3.0)', pos: 0}),
         {cs: '(one (2 two) 3.0)', pos: 17, result: {
             tag: 'list',
-            list: List.of({
+            list: [{
                 tag: "atom",
                 atom: {
                     symbol: "one",
@@ -190,7 +189,7 @@ Deno.test('s-expr parser', () => {
                 },
             },{
                 tag: "list",
-                list: List.of({
+                list: [{
                     tag: "atom",
                     atom: {
                         int: 2,
@@ -202,14 +201,14 @@ Deno.test('s-expr parser', () => {
                         symbol: "two",
                         tag: "symbol",
                     },
-                }),
+                }],
             },{
                 tag: "atom",
                 atom: {
                     float: 3,
                     tag: "float",
                 },
-            })
+            }]
         }}
     );
 });
@@ -217,13 +216,13 @@ Deno.test('s-expr parser', () => {
 Deno.test('symbol extraction', () => { 
     assertEquals(
         symbols(many1(Either(OneOf('a'), OneOf('b')))),
-        Set(['a', 'b'])
+        new Set(['a', 'b'])
     );
 });
 
 Deno.test('show parser', () => { 
     assertEquals(
         show(many1(Either(OneOf('a'), OneOf('b')))),
-        "map [([f, x]) => f(x))] (product (map [(t) => (ts) => ts.unshift(t))] (either (oneOf [a]) (oneOf [b]))) (fix (either (map [([f, x]) => f(x))] (product (map [(t) => (ts) => ts.unshift(t))] (either (oneOf [a]) (oneOf [b]))) ())) (return List []))))"
+        "map [([f, x]) => f(x))] (product (map [(t) => (ts) => [t, ...ts])] (either (oneOf [a]) (oneOf [b]))) (fix (either (map [([f, x]) => f(x))] (product (map [(t) => (ts) => [t, ...ts])] (either (oneOf [a]) (oneOf [b]))) ())) (return ))))"
     );
 });
