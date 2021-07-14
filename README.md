@@ -30,11 +30,32 @@ Here is an example parser for floating point numbers:
 
 ```ts
 const digit = OneOf('0123456789');
-
-export function float(): Parser<number> {
-    const float1 = seqMap((a, b) => a.concat([b]), many1(digit), OneOf('.'));
-    const float2 = seqMap((a, b) => a.concat(b), float1, many1(digit));
-    const float3 = seqMap((a, b, c) => a.concat([b], c), choice(float2, many1(digit)), OneOf('e'), many1(digit));
-    return FMap(a => parseFloat(a.join('')), choice(float3, float2, float1));
+const float1 = seqMap((a, b) => a.concat([b]), many1(digit), OneOf('.'));
+const float2 = seqMap((a, b) => a.concat(b), float1, many1(digit));
+const float3 = seqMap((a, b, c) => a.concat([b], c), choice(float2, many1(digit)), OneOf('e'), many1(digit));
+const float = FMap(a => parseFloat(a.join('')), choice(float3, float2, float1));
 }
 ```
+This parser can be compiled into a function:
+```ts
+const floatParser = parse(float);
+```
+`parse` is just one possible compiler, as the static parser definition (in this case float) does
+not depend on the implementation of `parse`, you can replace `parse` with a different implementation
+of the parser (say with no backtracking, or better error reporting) _without_ chaning the definiton
+of `float` at all.
+
+The supplied `parse` compiler produces a parser with the following type:
+```ts
+type Parse<A> = (_: {cs: string, pos: number}) => {result: A, cs: string, pos: number}|null;
+```
+So the parser can be applied to an input string as follows:
+```ts
+const parsed = floatParser({cs: '123.456e2', pos: 0});
+```
+The output `parsed` would then be:
+```ts
+{cs: '123.456e2', pos: 9, result: 12345.6}
+```
+`cs` is the complete input string, `pos` is the final position of the parser, and these can be used as the input to further parsers, alhough it would be better to build all the logic into a single parser as any needed logic can be
+expressed using the parser combinators. A `null` will be returned if the parser failed.
