@@ -30,10 +30,10 @@ Here is an example parser for floating point numbers:
 
 ```ts
 const digit = OneOf('0123456789');
-const float1 = seqMap((a, b) => a.concat([b]), many1(digit), OneOf('.'));
-const float2 = seqMap((a, b) => a.concat(b), float1, many1(digit));
-const float3 = seqMap((a, b, c) => a.concat([b], c), choice(float2, many1(digit)), OneOf('e'), many1(digit));
-const float = FMap(a => parseFloat(a.join('')), choice(float3, float2, float1));
+const float1 = seqMap((a, b) => [...a, b], many1(digit), OneOf('.'));
+const float2 = seqMap((a, b) => [...a, ...b], float1, many1(digit));
+const float3 = seqMap((a, b, c) => [...a, b, ...c], choice(float2, many1(digit)), OneOf('e'), many1(digit));
+export const float: Parser<number> = FMap(a => parseFloat(a.join('')), choice(float3, float2, float1));
 }
 ```
 This parser can be compiled into a function:

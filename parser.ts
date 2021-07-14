@@ -73,6 +73,9 @@ export function Forget<A>(forget: Parser<A>): Parser<A> {
 
 /**
  * `FMap` applies the `map` function to the result of running the `parser` argument.
+ * 
+ * This is where the constuction of any output data structures occurs, for example
+ * building an abstract syntax tree node from the results of a parser.
  */
 export function FMap<A,B>(map: (_:B) => A, parser: Parser<B>): Parser<A> {
     return {tag: 'map', exists: cont => cont({map, parser})};
@@ -81,6 +84,8 @@ export function FMap<A,B>(map: (_:B) => A, parser: Parser<B>): Parser<A> {
 /**
  * `Product` runs the `left` parser, and then if it succeeds, runs the `right` parser.
  * The `left` and `right` parsers can be different types.
+ * 
+ * This allows the results of two parsers to be combined together into a single result.
  */
 export function Product<A,B>(left: Parser<A>, right: Parser<B>): Parser<[A,B]> {
     return {tag: 'product', exists: cont => cont({left, right})};
@@ -174,7 +179,12 @@ function constant<A,B>(x:A): (_:B) => A {
     return _ => x;
 }
 
-type Parse<A> = (_: {cs: string, pos: number}) => {result: A, cs: string, pos: number}|null;
+/**
+ * `Parse` is the type returned by the `parse` function, which takes an input string `cs`, and
+ * a position `pos`, and returns the input string, the updated position, and the result of the 
+ * parser. 
+ */
+export type Parse<A> = (_: {cs: string, pos: number}) => {result: A, cs: string, pos: number}|null;
 
 export function parse<A,P extends Parser<A>>(parser: P extends Fail<A> ? Parser<A> : never): Parse<A>;
 export function parse<A,P extends Parser<A>>(parser: P extends Empty<A> ? Parser<A> : never): Parse<undefined>;
@@ -187,8 +197,9 @@ export function parse<A,P extends Parser<A>>(parser: P extends Either<A> ? Parse
 export function parse<A,P extends Parser<A>>(parser: P extends Fix<A> ? Parser<A> : never): Parse<A>;
 export function parse<A,P extends Parser<A>>(parser: P extends Raw<A> ? Parser<A> : never): Parse<A>;
 /**
- * `parse` takes a parser Abstract Syntax Tree as its argument, and returns a function 
- * from input string and position, to parse result, input string, and position.
+ * `parse` takes a statis parser-combinator Abstract Syntax Tree as its only argument, and compiles it
+ * to a parser from input string and position, to parse result, input string, and position.
+ * see `Parse` type for the details of the type of the resulting parser. 
  */
 export function parse<A>(parser: Parser<A>): Parse<A|undefined|string|[Left<A>,Right<A>]> {
     switch (parser.tag) {
@@ -380,6 +391,15 @@ export function seq<T extends Parser<any>[]>(...parsers: T): RemapParsers<T> {
     return parsers.reduceRight((ps, p) => apply(FMap(tupleCons, p), ps), Return([]));
 }
 
+/**
+ * `seqMap` accepts a map function as the first argument, and then the remaining arguments are parsers.
+ * If all the parsers succeed, the map function is called with the result of each parser as an
+ * argument to the map function in the same order as the parsers.
+ * 
+ * This is used to implement the common pattern of calling a map function to construct an abstract
+ * syntax tree node with the results of several parsers that must all succeed, where each parser can
+ * return a different type.
+ */
 // deno-lint-ignore no-explicit-any
 export function seqMap<A,T extends Parser<any>[]>(map: (..._:UnwrapParsers<T>) => A, ...parsers: T): Parser<A> {
     return FMap(x => map(...x), seq(...parsers));
@@ -395,9 +415,7 @@ const digit = OneOf('0123456789');
 /**
  * `integer` parses an integer number.
  */
-export function integer(): Parser<number> {
-    return FMap(cs => parseInt(cs.join('')), many1(digit));
-}
+export const integer: Parser<number> = FMap(cs => parseInt(cs.join('')), many1(digit));
 
 // float
 /*
@@ -423,59 +441,62 @@ function float(): Parser<number> {
 
 // float
 
+const float1 = seqMap((a, b) => [...a, b], many1(digit), OneOf('.'));
+const float2 = seqMap((a, b) => [...a, ...b], float1, many1(digit));
+const float3 = seqMap((a, b, c) => [...a, b, ...c], choice(float2, many1(digit)), OneOf('e'), many1(digit));
 /**
  * `float` parses a floating point number.
  */
-export function float(): Parser<number> {
-    const float1 = seqMap((a, b) => a.concat([b]), many1(digit), OneOf('.'));
-    const float2 = seqMap((a, b) => a.concat(b), float1, many1(digit));
-    const float3 = seqMap((a, b, c) => a.concat([b], c), choice(float2, many1(digit)), OneOf('e'), many1(digit));
-    return FMap(a => parseFloat(a.join('')), choice(float3, float2, float1));
-}
+export const float: Parser<number> = FMap(a => parseFloat(a.join('')), choice(float3, float2, float1));
 
 // S-Expression
 
-type Atom =
+/**
+ * Type of `Atom` for example s-expression parser.
+ */
+export type Atom =
     | {tag: 'int', int: number}
     | {tag: 'float', float: number}
     | {tag: 'string', string: string}
     | {tag: 'symbol', symbol: string}
     ;
 
-type SExp =
+/**
+ * Type of `SExp` for example s-expression parser.
+ */
+export type SExp =
     | {tag: 'atom', atom: Atom}
     | {tag: 'list', list: SExp[]}
         
+const MkInt = (int: number): Atom => ({tag: 'int', int});
+const MkFloat = (float: number): Atom => ({tag: 'float', float});
+const MkString = (string: string): Atom => ({tag: 'string', string});
+const MkSymbol = (symbol: string): Atom => ({tag: 'symbol', symbol});
+const MkAtom = (atom: Atom): SExp => ({tag: 'atom', atom});
+const MkList = (list: SExp[]): SExp => ({tag: 'list', list}); 
+const leftParen = OneOf('(');
+const rightParen = OneOf(')');
+const quote = OneOf('"');
+const space = OneOf('\n\r\t ');
+const specialChar = '()\n\r\t\" ';
+const isRegular = [...Array.from(Array(256).keys(), x => String.fromCharCode(x))].filter(c => specialChar.indexOf(c) < 0).join('');
+const regularChar = OneOf(isRegular);
+const regularString = FMap(x => x.join(''), many1(regularChar));
+const quotedString = FMap(x => x.join(''), between(quote, quote, many(choice(regularChar, space, leftParen, rightParen))));
+const endNum = Forget(choice(Empty(), space, rightParen)); 
+const atom = choice(
+    FMap(MkInt, first(integer, endNum)),
+    FMap(MkFloat, first(float, endNum)),
+    FMap(MkString, quotedString),
+    FMap(MkSymbol, regularString),
+);
+const expr = (sexpr: Parser<SExp>) => Either(
+    FMap(MkList, between(leftParen, rightParen, many(sexpr))),
+    FMap(MkAtom, atom)
+);
 /**
  * `sexpr` parses an s-expression which can consist of an atom, integer,
  * float, or string, and lists of these types enclosed in parentheses.
+ * See `SExp` and `Atom` for result structure.
  */
-export function sexpr(): Parser<SExp> {
-    const MkInt = (int: number): Atom => ({tag: 'int', int});
-    const MkFloat = (float: number): Atom => ({tag: 'float', float});
-    const MkString = (string: string): Atom => ({tag: 'string', string});
-    const MkSymbol = (symbol: string): Atom => ({tag: 'symbol', symbol});
-    const MkAtom = (atom: Atom): SExp => ({tag: 'atom', atom});
-    const MkList = (list: SExp[]): SExp => ({tag: 'list', list}); 
-    const leftParen = OneOf('(');
-    const rightParen = OneOf(')');
-    const quote = OneOf('"');
-    const space = OneOf('\n\r\t ');
-    const specialChar = '()\n\r\t\" ';
-    const isRegular = [...Array.from(Array(256).keys(), x => String.fromCharCode(x))].filter(c => specialChar.indexOf(c) < 0).join('');
-    const regularChar = OneOf(isRegular);
-    const regularString = FMap(x => x.join(''), many1(regularChar));
-    const quotedString = FMap(x => x.join(''), between(quote, quote, many(choice(regularChar, space, leftParen, rightParen))));
-    const endNum = Forget(choice(Empty(), space, rightParen)); 
-    const atom = choice(
-        FMap(MkInt, first(integer(), endNum)),
-        FMap(MkFloat, first(float(), endNum)),
-        FMap(MkString, quotedString),
-        FMap(MkSymbol, regularString),
-    );
-    const expr = (sexpr: Parser<SExp>) => Either(
-        FMap(MkList, between(leftParen, rightParen, many(sexpr))),
-        FMap(MkAtom, atom)
-    );
-    return Fix(sexp => between(many(space), many(space), expr(sexp)));
-}
+export const sexpr: Parser<SExp> = Fix(sexp => between(many(space), many(space), expr(sexp)));

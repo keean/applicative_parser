@@ -125,42 +125,42 @@ Deno.test('between parser', () => {
 
 Deno.test('integer parser', () => {
     assertEquals(
-        parse(integer())({cs: '123456abc', pos: 0}),
+        parse(integer)({cs: '123456abc', pos: 0}),
         {cs: '123456abc', pos: 6, result: 123456}
     );
 });
 
 Deno.test('float parser', () => {
     assertEquals(
-        parse(float())({cs: '123.', pos: 0}),
+        parse(float)({cs: '123.', pos: 0}),
         {cs: '123.', pos: 4, result: 123}
     );
     assertEquals(
-        parse(float())({cs: '123.456', pos: 0}),
+        parse(float)({cs: '123.456', pos: 0}),
         {cs: '123.456', pos: 7, result: 123.456}
     );
     assertEquals(
-        parse(float())({cs: '123.456e2', pos: 0}),
+        parse(float)({cs: '123.456e2', pos: 0}),
         {cs: '123.456e2', pos: 9, result: 12345.6}
     )
     assertEquals(
-        parse(float())({cs: '123e2', pos: 0}),
+        parse(float)({cs: '123e2', pos: 0}),
         {cs: '123e2', pos: 5, result: 12300}
     );
     assertEquals(
-        parse(float())({cs: '123.e2', pos: 0}),
+        parse(float)({cs: '123.e2', pos: 0}),
         {cs: '123.e2', pos: 4, result: 123}
     );
     assertEquals(
-        parse(float())({cs: '123', pos: 0}),
+        parse(float)({cs: '123', pos: 0}),
         null
     );
     assertEquals(
-        parse(float())({cs: '.123', pos: 0}),
+        parse(float)({cs: '.123', pos: 0}),
         null
     );
     assertEquals(
-        parse(float())({cs: '.456e2', pos: 0}),
+        parse(float)({cs: '.456e2', pos: 0}),
         null
     );
 });
@@ -168,7 +168,7 @@ Deno.test('float parser', () => {
 
 Deno.test('s-expr parser', () => {
     assertEquals(
-        parse(sexpr())({cs: 'one 2 3.0', pos: 0}),
+        parse(sexpr)({cs: 'one 2 3.0', pos: 0}),
         {cs: 'one 2 3.0', pos: 4, result: {
             tag: "atom",
             atom: {
@@ -178,7 +178,7 @@ Deno.test('s-expr parser', () => {
         }}
     );
     assertEquals(
-        parse(sexpr())({cs: '(one (2 two) 3.0)', pos: 0}),
+        parse(sexpr)({cs: '(one (2 two) 3.0)', pos: 0}),
         {cs: '(one (2 two) 3.0)', pos: 17, result: {
             tag: 'list',
             list: [{
