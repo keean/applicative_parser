@@ -280,7 +280,7 @@ export function opt<A>(p: Parser<A>, x: A): Parser<A> {
  * `choice` tries each parser in turn, returning the first success, or failing if none succeed.
  */
 export function choice<A>(...ps: Array<Parser<A>>): Parser<A> {
-    return ps.reduce((acc, x) => Either(acc, x), Fail(''));
+    return ps.reduceRight((acc, x) => Either(x, acc), Fail(''));
 }
 
 // Infix operators, not implementable in typescript, use prefix forms:
@@ -323,7 +323,7 @@ const arrayCons = <A>(t: A) => (ts: A[]) => [t, ...ts]
  */
 export function many<A>(p: Parser<A>) {
     return Fix<A[]>(many => 
-        Either(apply(FMap(arrayCons, p), many), Return([]) as Parser<A[]>),
+        Either(apply(FMap(arrayCons, p), many), Return<A[]>([])),
     );
 }
 
