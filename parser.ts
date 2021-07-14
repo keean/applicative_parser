@@ -123,23 +123,23 @@ function Raw<A>(f: Parse<A>): Parser<A> {
 export function show<A>(parser: Parser<A>): string {
     switch (parser.tag) {
         case 'fail' :
-            return parser.exists(p => p.fail);
+            return parser.exists(p => `Fail('${p.fail}')`);
         case 'empty':
-            return 'empty';
+            return 'Empty()';
         case 'return':
-            return parser.exists(p => `return ${p.result}`);
+            return parser.exists(p => `Return(${p.result})`);
         case 'forget':
-            return parser.exists(p => `forget (${show(p.forget)}}`);
+            return parser.exists(p => `Forget(${show(p.forget)})`);
         case 'oneOf':
-            return parser.exists(p => `oneOf [${p.oneOf}]`);
+            return parser.exists(p => `OneOf('${p.oneOf}')`);
         case 'map':
-            return parser.exists(p => `map [${p.map.toString().replace(/\s+/g, ' ')})] (${show(p.parser)})`);
+            return parser.exists(p => `FMap(${p.map.toString().replace(/\s+/g, ' ')}, (${show(p.parser)})`);
         case 'product':
-            return parser.exists(p => `product (${show(p.left)}) (${show(p.right)})`);
+            return parser.exists(p => `Product(${show(p.left)}, ${show(p.right)})`);
         case 'either':
-            return parser.exists(p => `either (${show(p.left)}) (${show(p.right)})`);
+            return parser.exists(p => `Either(${show(p.left)}, ${show(p.right)})`);
         case 'fix':
-            return parser.exists(p => `fix (${show(p.f(Fail<A>('')))})`);
+            return parser.exists(p => `Fix(${show(p.f(Fail<A>('')))})`);
         case 'raw':
             return '';
     }
@@ -378,9 +378,11 @@ type UnwrapParsers<T extends unknown[]> = T extends [infer Head, ...infer Tail]
 
 type RemapParsers<T extends unknown[]> = Parser<UnwrapParsers<T>>;
 
-function tupleCons<T>(t: T): <TS extends unknown[]>(ts: TS) => readonly [T, ...TS] {
-    return ts => [t, ...ts] as const;
-}
+//function tupleCons<T>(t: T): <TS extends unknown[]>(ts: TS) => readonly [T, ...TS] {
+//    return ts => [t, ...ts] as const;
+//}
+
+const tupleCons: <T>(t: T) => <TS extends unknown[]>(ts: TS) => readonly [T, ...TS] = t => ts => [t, ...ts] as const;
 
 /**
  * `seq` applies each parser in sequence and returns a tuple of their results if they all succeed,
@@ -404,6 +406,7 @@ export function seq<T extends Parser<any>[]>(...parsers: T): RemapParsers<T> {
 export function seqMap<A,T extends Parser<any>[]>(map: (..._:UnwrapParsers<T>) => A, ...parsers: T): Parser<A> {
     return FMap(x => map(...x), seq(...parsers));
 }
+
 
 //----------------------------------------------------------------------------
 // Example parsers

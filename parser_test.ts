@@ -223,6 +223,6 @@ Deno.test('symbol extraction', () => {
 Deno.test('show parser', () => { 
     assertEquals(
         show(many1(Either(OneOf('a'), OneOf('b')))),
-        "map [([f, x]) => f(x))] (product (map [(t) => (ts) => [t, ...ts])] (either (oneOf [a]) (oneOf [b]))) (fix (either (map [([f, x]) => f(x))] (product (map [(t) => (ts) => [t, ...ts])] (either (oneOf [a]) (oneOf [b]))) ())) (return ))))"
+        "FMap(([f, x]) => f(x), (Product(FMap((t) => (ts) => [t, ...ts], (Either(OneOf('a'), OneOf('b'))), Fix(Either(FMap(([f, x]) => f(x), (Product(FMap((t) => (ts) => [t, ...ts], (Either(OneOf('a'), OneOf('b'))), Fail(''))), Return()))))"
     );
 });

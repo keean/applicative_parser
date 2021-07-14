@@ -59,3 +59,10 @@ The output `parsed` would then be:
 ```
 `cs` is the complete input string, `pos` is the final position of the parser, and these can be used as the input to further parsers, alhough it would be better to build all the logic into a single parser as any needed logic can be
 expressed using the parser combinators. A `null` will be returned if the parser failed.
+
+Below is the result of `show(float)` but with the functions in the maps replaced with `?`, to show that the 
+whole structure of the parser is static, and transparent (unlike with the monadic approach). The helper functions like
+`choice` and `seqMap` are all represented by the combinators in the initial algebra.
+```ts
+FMap(?, Either(Either(Either(Fail(), FMap(?, FMap(?, Product(FMap(?, Either(Either(Fail(), FMap(?, FMap(?, Product(FMap(?, FMap(?, FMap(?, Product(FMap(?, FMap(?, Product(FMap(?, OneOf('0123456789')), Fix(Either(FMap(?, Product(FMap(?, OneOf('0123456789')), Fail())), Return()))))), FMap(?, Product(FMap(?, OneOf('.')), Return())))))), FMap(?, Product(FMap(?, FMap(?, Product(FMap(?, OneOf('0123456789')), Fix(Either(FMap(?, Product(FMap(?, OneOf('0123456789')), Fail())), Return()))))), Return())))))), FMap(?, Product(FMap(?, OneOf('0123456789')), Fix(Either(FMap(?, Product(FMap(?, OneOf('0123456789')), Fail())), Return())))))), FMap(?, Product(FMap(?, OneOf('e')), FMap(?, Product(FMap(?, FMap(?, Product(FMap(?, OneOf('0123456789')), Fix(Either(FMap(?, Product(FMap(?, OneOf('0123456789')), Fail())), Return()))))), Return())))))))), FMap(?, FMap(?, Product(FMap(?, FMap(?, FMap(?, Product(FMap(?, FMap(?, Product(FMap(?, OneOf('0123456789')), Fix(Either(FMap(?, Product(FMap(?, OneOf('0123456789')), Fail())), Return()))))), FMap(?, Product(FMap(?, OneOf('.')), Return())))))), FMap(?, Product(FMap(?, FMap(?, Product(FMap(?, OneOf('0123456789')), Fix(Either(FMap(?, Product(FMap(?, OneOf('0123456789')), Fail())), Return()))))), Return())))))), FMap(?, FMap(?, Product(FMap(?, FMap(?, Product(FMap(?, OneOf('0123456789')), Fix(Either(FMap(?, Product(FMap(?, OneOf('0123456789')), Fail())), Return()))))), FMap(?, Product(FMap(?, OneOf('.')), Return())))))))
+```
