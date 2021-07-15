@@ -349,12 +349,12 @@ export function between<A, B, C>(ps: Parser<A>, pe: Parser<B>, p: Parser<C>): Pa
 /**
  * `spaces` succeeds if there are one or more spaces, otherwise fails
  */
-const spaces: Parser<string[]> = many1(OneOf('\n\r\t '));
+export const spaces: Parser<string[]> = many1(OneOf('\n\r\t '));
 
 /**
  * `optSpaces` accepts zero or more spaces, always succeeds.
  */
-const optSpaces: Parser<string[]> = many(OneOf('\n\r\t '));
+export const optSpaces: Parser<string[]> = many(OneOf('\n\r\t '));
 
 /**
  * `string` matches string `s` or fails.
