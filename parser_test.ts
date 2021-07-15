@@ -1,5 +1,5 @@
 import {assertEquals} from './test_deps.ts';
-import {parse, Fail, Empty, OneOf, Return, FMap, Product, Either, many, many1, between, symbols, show, token, integer, float, sexpr} from './parser.ts';
+import {string, parse, Fail, Empty, OneOf, Return, FMap, Product, Either, many, many1, between, symbols, show, token, integer, float, sexpr} from './parser.ts';
 
 const empty = {cs: '', pos: 0};
 const text = {cs: 'a b ab aa bb c', pos: 0};
@@ -61,19 +61,19 @@ Deno.test('fmap parser', () => {
 
 Deno.test('product parser', () => {
     assertEquals(
-        parse(Product(token('a'), token('b')))(text),
+        parse(Product(token(string('a')), token(string('b'))))(text),
         {...text, pos: 4, result: ['a', 'b']}
     );
     assertEquals(
-        parse(Product(token('b'), token('b')))(text),
+        parse(Product(token(string('b')), token(string('b'))))(text),
         null
     );
     assertEquals(
-        parse(Product(token('a'), token('a')))(text),
+        parse(Product(token(string('a')), token(string('a'))))(text),
         null
     );
     assertEquals(
-        parse(Product(token('b'), token('a')))(text),
+        parse(Product(token(string('b')), token(string('a'))))(text),
         null
     );
 });
@@ -99,19 +99,19 @@ Deno.test('either parser', () => {
 
 Deno.test('many parser', () => {
     assertEquals(
-        parse(many(Either(token('a'), token('b'))))(text),
+        parse(many(Either(token(string('a')), token(string('b')))))(text),
         {...text, pos: 13, result: ['a', 'b', 'a', 'b', 'a', 'a', 'b', 'b']}
     );
     assertEquals(
-        parse(many(token('c')))(text),
+        parse(many(token(string('c'))))(text),
         {...text, pos: 0, result: []}
     );
     assertEquals(
-        parse(many1(Either(token('a'), token('b'))))(text),
+        parse(many1(Either(token(string('a')), token(string('b')))))(text),
         {...text, pos: 13, result: ['a', 'b', 'a', 'b', 'a', 'a', 'b', 'b']}
     );
     assertEquals(
-        parse(many1(token('c')))(text),
+        parse(many1(token(string('c'))))(text),
         null
     );
 });
