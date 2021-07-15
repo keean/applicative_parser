@@ -17,7 +17,10 @@ type Either<A> = {tag: 'either', exists: <R>(cont: (_: {left: Parser<A>, right: 
 type Fix<A> = {tag: 'fix', exists: <R>(cont: (_: {f: (_:Parser<A>) => Parser<A>}) => R) => R};
 type Raw<A> = {tag: 'raw', exists: <R>(cont: (_: {f: Parse<A>}) => R) => R};
 
-type Parser<A> =
+/**
+ * `Parser<A>` is the type of a parser combinator that returns a value with generic type `A`.
+ */
+export type Parser<A> =
     | Fail<A>
     | Empty<A>
     | OneOf<A>
