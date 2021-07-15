@@ -366,8 +366,8 @@ export function string(s: string): Parser<string> {
 /**
  * `string` matches string `token` and consumes any trailing spaces, or fails.
  */
-export function token(token: string): Parser<string>{
-    return first(string(token), optSpaces());
+export function token(token: Parser<A>): Parser<A>{
+    return first(token, optSpaces());
 }
 
 type UnwrapParser<T> = T extends Parser<infer U> ? U : T;
