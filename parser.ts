@@ -383,8 +383,10 @@ export const optSpaces: Parser<any, string[]> = many(OneOf('\n\r\t '));
 /**
  * `string` matches string `s` or fails.
  */
-export function string<A>(s: string): Parser<A,string> {
-    return FMap(cs => cs.join(''), Array.from(s).reduceRight((cs, c) => apply(FMap(arrayCons, OneOf(c)), cs), Return<A,string[]>([])));
+// deno-lint-ignore no-explicit-any
+export function string(s: string): Parser<any ,string> {
+    // deno-lint-ignore no-explicit-any
+    return FMap(cs => cs.join(''), Array.from(s).reduceRight((cs, c) => apply(FMap(arrayCons, OneOf(c)), cs), Return<any, string[]>([])));
 }
 
 /**
