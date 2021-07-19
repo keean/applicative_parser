@@ -121,6 +121,10 @@ function Raw<A,B>(f: Parse<A,B>): Parser<A,B> {
 
 // Inherited (Parent) Attributes
 
+/**
+ * `ArgMap` applies `map` to the attributes passed from the parent node in the 
+ * parser tree structure.
+ */
 export function ArgMap<A,B,C>(map: (_:A) => C, parser: Parser<C,B>): Parser<A,B> {
     return {tag: 'argmap', exists: cont => cont({map, parser})};
 }
@@ -194,8 +198,9 @@ function constant<A,B>(x:A): (_:B) => A {
 }
 
 /**
- * `Parse` is the type returned by the `parse` function, which takes an input string `cs`, and
- * a position `pos`, and returns the input string, the updated position, and the result of the 
+ * `Parse` is the type returned by the `parse` function, which takes an input string `cs`,
+ * a position `pos`, and the inherited attributes `args` passed to the root of the parser,
+ * and returns the input string, the updated position, and the result of the 
  * parser. 
  */
 export type Parse<A,B> = (_: {cs: string, pos: number, args: A}) => {result: B, cs: string, pos: number}|null;
@@ -366,11 +371,13 @@ export function between<A,B,C,D>(ps: Parser<A,B>, pe: Parser<A,C>, p: Parser<A,D
 /**
  * `spaces` succeeds if there are one or more spaces, otherwise fails
  */
+// deno-lint-ignore no-explicit-any
 export const spaces: Parser<any, string[]> = many1(OneOf('\n\r\t '));
 
 /**
  * `optSpaces` accepts zero or more spaces, always succeeds.
  */
+// deno-lint-ignore no-explicit-any
 export const optSpaces: Parser<any, string[]> = many(OneOf('\n\r\t '));
 
 /**

@@ -33,7 +33,7 @@ const digit = OneOf('0123456789');
 const float1 = seqMap((a, b) => [...a, b], many1(digit), OneOf('.'));
 const float2 = seqMap((a, b) => [...a, ...b], float1, many1(digit));
 const float3 = seqMap((a, b, c) => [...a, b, ...c], choice(float2, many1(digit)), OneOf('e'), many1(digit));
-export const float: Parser<number> = FMap(a => parseFloat(a.join('')), choice(float3, float2, float1));
+export const float: Parser<unknown,number> = FMap(a => parseFloat(a.join('')), choice(float3, float2, float1));
 }
 ```
 This parser can be compiled into a function:
@@ -47,7 +47,7 @@ of `float` at all.
 
 The supplied `parse` compiler produces a parser with the following type:
 ```ts
-type Parse<A> = (_: {cs: string, pos: number}) => {result: A, cs: string, pos: number}|null;
+type Parse<A,B> = (_: {cs: string, pos: number, args: A}) => {result: B, cs: string, pos: number}|null;
 ```
 So the parser can be applied to an input string as follows:
 ```ts
