@@ -257,9 +257,9 @@ export function parse<A,B>(parser: Parser<A,B>): Parse<A,B|undefined|string|[Lef
                 return state => {
                     const left = ep(state) 
                     if (left !== null) {
-                        const right = eq({cs: state.cs, pos: left.pos, args: state.args});
+                        const right = eq({cs: left.cs, pos: left.pos, args: state.args});
                         if (right !== null) {
-                            return {...right, result: [left.result, right.result]};
+                            return {cs: right.cs, pos: right.pos, result: [left.result, right.result]};
                         }
                     }
                     return null;
