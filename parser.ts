@@ -16,7 +16,7 @@ type Product<A,B> = {tag: 'product', exists: <R>(cont: (_: {left: Parser<A,Left<
 type Either<A,B> = {tag: 'either', exists: <R>(cont: (_: {left: Parser<A,B>, right: Parser<A,B>}) => R) => R};
 type Fix<A,B> = {tag: 'fix', exists: <R>(cont: (_: {f: (_:Parser<A,B>) => Parser<A,B>}) => R) => R};
 type Raw<A,B> = {tag: 'raw', exists: <R>(cont: (_: {f: Parse<A,B>}) => R) => R};
-type ArgMap<A,B> = {tag: 'argmap', exists: <R>(cont: <C>(_: {map: (_:A) => C, parser: Parser<C,B>}) => R) => R};
+type ArgMap<A,B> = {tag: 'argmap', exists: <R>(cont: <C>(_: {map: (_a:A, _r:Left<B>) => C, left: Parser<A,Left<B>>, right: Parser<C,Right<B>>}) => R) => R};
 
 /**
  * `Parser<A>` is the type of a parser combinator that returns a value with generic type `A`.
@@ -125,8 +125,8 @@ function Raw<A,B>(f: Parse<A,B>): Parser<A,B> {
  * `ArgMap` applies `map` to the attributes passed from the parent node in the 
  * parser tree structure.
  */
-export function ArgMap<A,B,C>(map: (_:A) => C, parser: Parser<C,B>): Parser<A,B> {
-    return {tag: 'argmap', exists: cont => cont({map, parser})};
+export function ArgMap<A,B,C,D>(map: (_a:A, _r:D) => C, left: Parser<A,D>, right: Parser<C,B>): Parser<A,[D,B]> {
+    return {tag: 'argmap', exists: cont => cont({map, left, right})};
 }
 
 //----------------------------------------------------------------------------
@@ -285,8 +285,18 @@ export function parse<A,B>(parser: Parser<A,B>): Parse<A,B|undefined|string|[Lef
             });
         case 'argmap':
             return parser.exists(p => {
-                const ep = parse(p.parser);
-                return state => ep({cs: state.cs, pos: state.pos, args: p.map(state.args)});
+                const ep = parse(p.left);
+                const eq = parse(p.right);
+                return state => {
+                    const left = ep(state);
+                    if (left !== null) {
+                        const right = eq({cs: left.cs, pos: left.pos, args: p.map(state.args, left.result)});
+                        if (right !== null) {
+                            return {cs: right.cs, pos: right.pos, result: [left.result, right.result]};
+                        }
+                    } 
+                    return null;
+                };
             });
     }
 }
