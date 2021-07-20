@@ -396,12 +396,16 @@ export function token<A,B>(tok: Parser<A,B>): Parser<A,B> {
     return first(tok, optSpaces);
 }
 
-type UnwrapParser<A,T> = T extends Parser<A,infer U> ? U : T;
+// deno-lint-ignore no-explicit-any
+type UnwrapParser<T> = T extends Parser<any, infer U> ? U : T;
 
-type UnwrapParsers<A,T extends unknown[]> = T extends [infer Head, ...infer Tail]
-    ? [UnwrapParser<A,Head>, ...UnwrapParsers<A,Tail>] : [];
+type UnwrapParsers<T extends unknown[]> = T extends [infer Head, ...infer Tail]
+    ? [UnwrapParser<Head>, ...UnwrapParsers<Tail>] : [];
 
-type RemapParsers<A,T extends unknown[]> = Parser<A,UnwrapParsers<A,T>>;
+// deno-lint-ignore no-explicit-any
+type UnwrapArg<T> = T extends Parser<infer U, any>[] ? U : unknown;
+
+//type RemapParsers<T extends unknown[]> = Parser<any, UnwrapParsers<T>>;
 
 //function tupleCons<T>(t: T): <TS extends unknown[]>(ts: TS) => readonly [T, ...TS] {
 //    return ts => [t, ...ts] as const;
@@ -414,7 +418,7 @@ const tupleCons: <T>(t: T) => <TS extends unknown[]>(ts: TS) => readonly [T, ...
  * or fails if any fail.
  */
 // deno-lint-ignore no-explicit-any
-export function seq<A,T extends Parser<A,any>[]>(...parsers: T): RemapParsers<A,T> {
+export function seq<T extends Parser<any,any>[]>(...parsers: T): Parser<UnwrapArg<T>, UnwrapParsers<T>> {
     return parsers.reduceRight((ps, p) => apply(FMap(tupleCons, p), ps), Return([]));
 }
 
@@ -428,10 +432,9 @@ export function seq<A,T extends Parser<A,any>[]>(...parsers: T): RemapParsers<A,
  * return a different type.
  */
 // deno-lint-ignore no-explicit-any
-export function seqMap<A,B,T extends Parser<A,any>[]>(map: (..._:UnwrapParsers<A,T>) => B, ...parsers: T): Parser<A,B> {
-    return FMap(x => map(...x), seq(...parsers));
+export function seqMap<A,T extends Parser<any, any>[]>(map: (..._: [...UnwrapParsers<T>, UnwrapArg<T>]) => A, ...parsers: T): Parser<UnwrapArg<T>, A> {
+    return FMap((x, y) => map(...x, y), seq(...parsers));
 }
-
 
 //----------------------------------------------------------------------------
 // Example parsers
@@ -469,13 +472,13 @@ function float(): Parser<number> {
 
 // float
 
-const float1 = seqMap((a, b) => [...a, b], many1(digit), OneOf('.'));
+const float1 = seqMap((a, b) => [...a, b], many1(digit) as Parser<number, string[]>, OneOf('.'));
 const float2 = seqMap((a, b) => [...a, ...b], float1, many1(digit));
 const float3 = seqMap((a, b, c) => [...a, b, ...c], choice(float2, many1(digit)), OneOf('e'), many1(digit));
 /**
  * `float` parses a floating point number.
  */
-export const float: Parser<unknown,number> = FMap(a => parseFloat(a.join('')), choice(float3, float2, float1));
+export const float = FMap(a => parseFloat(a.join('')), choice(float3, float2, float1));
 
 // S-Expression
 
