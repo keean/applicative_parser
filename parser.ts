@@ -157,7 +157,7 @@ export function show<A,B>(parser: Parser<A,B>): string {
         case 'raw':
             return '';
         case 'argmap':
-            return parser.exists(p => `ArgMap(${p.map.toString().replace(/\s+/g, ' ')}, (${show(p.parser)})`);
+            return parser.exists(p => `ArgMap(${p.map.toString().replace(/\s+/g, ' ')}, (${show(p.left)}), (${show(p.right)})`);
     }
 }
 
@@ -187,7 +187,7 @@ export function symbols<A,B>(parser: Parser<A,B>): Set<string> {
         case 'raw':
             return new Set();
         case 'argmap':
-            return parser.exists(p => symbols(p.parser));
+            return parser.exists(p => new Set([...symbols(p.left), ...symbols(p.right)]));
     }
 }
    

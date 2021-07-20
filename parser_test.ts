@@ -229,7 +229,7 @@ Deno.test('show parser', () => {
 
 Deno.test('AppMap', () => {
     assertEquals(
-        parse(ArgMap(({n}:{n:number}) => ({n:n+1}), FMap((m:number, {n}:{n:number}) => n+m, Return(1)))) ({cs: '', pos: 0, args: {n:1}}),
-        {cs: '', pos:0, result: 3}
+        parse(ArgMap(({n}:{n:number}) => ({n:n+1}), Return(0), FMap((m:number, {n}:{n:number}) => n+m, Return(1)))) ({cs: '', pos: 0, args: {n:1}}),
+        {cs: '', pos:0, result: [0,3]}
     );
 });
