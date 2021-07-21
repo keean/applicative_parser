@@ -1,8 +1,8 @@
 import {assertEquals} from './test_deps.ts';
-import {string, parse, Fail, Empty, OneOf, Return, FMap, Product, Either, many, many1, between, symbols, show, token, integer, float, sexpr, ArgMap} from './parser.ts';
+import {string, parse, Fail, Empty, OneOf, Return, RMap, Product, Either, many, many1, between, symbols, show, token, integer, float, sexpr, LMap} from './parser.ts';
 
-const empty = {cs: '', pos: 0, args: {}};
-const text = {cs: 'a b ab aa bb c', pos: 0, args: {}};
+const empty = {cs: '', pos: 0, attr: {}};
+const text = {cs: 'a b ab aa bb c', pos: 0, attr: {}};
 
 Deno.test('fail parser', () => {
     assertEquals(
@@ -42,19 +42,19 @@ Deno.test('return parser', () => {
 
 Deno.test('fmap parser', () => {
     assertEquals(
-        parse(FMap(() => ({}), OneOf('a')))(text),
+        parse(RMap(() => ({}), OneOf('a')))(text),
         {cs: 'a b ab aa bb c', pos: 1, result: {}}
     );
     assertEquals(
-        parse(FMap(() => ({}), OneOf('b')))(text),
+        parse(RMap(() => ({}), OneOf('b')))(text),
         null
     );
     assertEquals(
-        parse(FMap(c => c.length, OneOf('a')))(text),
+        parse(RMap(c => c.length, OneOf('a')))(text),
         {cs: 'a b ab aa bb c', pos: 1, result: 1}
     )         
     assertEquals(
-        parse(FMap(s => s.toUpperCase(), FMap(c => c + c, OneOf('a'))))(text),
+        parse(RMap(s => s.toUpperCase(), RMap(c => c + c, OneOf('a'))))(text),
         {cs: 'a b ab aa bb c', pos: 1, result: 'AA'}
     );
 });
@@ -118,49 +118,49 @@ Deno.test('many parser', () => {
 
 Deno.test('between parser', () => {
     assertEquals(
-        parse(between(OneOf('('), OneOf(')'), many(OneOf('a'))))({cs: '(aa)', pos: 0, args:{}}),
+        parse(between(OneOf('('), OneOf(')'), many(OneOf('a'))))({cs: '(aa)', pos: 0, attr:{}}),
         {cs: '(aa)', pos: 4, result: ['a', 'a']}
     );
 })
 
 Deno.test('integer parser', () => {
     assertEquals(
-        parse(integer)({cs: '123456abc', pos: 0, args:{}}),
+        parse(integer)({cs: '123456abc', pos: 0, attr:{}}),
         {cs: '123456abc', pos: 6, result: 123456}
     );
 });
 
 Deno.test('float parser', () => {
     assertEquals(
-        parse(float)({cs: '123.', pos: 0, args:{}}),
+        parse(float)({cs: '123.', pos: 0, attr:{}}),
         {cs: '123.', pos: 4, result: 123}
     );
     assertEquals(
-        parse(float)({cs: '123.456', pos: 0, args:{}}),
+        parse(float)({cs: '123.456', pos: 0, attr:{}}),
         {cs: '123.456', pos: 7, result: 123.456}
     );
     assertEquals(
-        parse(float)({cs: '123.456e2', pos: 0, args:{}}),
+        parse(float)({cs: '123.456e2', pos: 0, attr:{}}),
         {cs: '123.456e2', pos: 9, result: 12345.6}
     )
     assertEquals(
-        parse(float)({cs: '123e2', pos: 0, args:{}}),
+        parse(float)({cs: '123e2', pos: 0, attr:{}}),
         {cs: '123e2', pos: 5, result: 12300}
     );
     assertEquals(
-        parse(float)({cs: '123.e2', pos: 0, args:{}}),
+        parse(float)({cs: '123.e2', pos: 0, attr:{}}),
         {cs: '123.e2', pos: 4, result: 123}
     );
     assertEquals(
-        parse(float)({cs: '123', pos: 0, args:{}}),
+        parse(float)({cs: '123', pos: 0, attr:{}}),
         null
     );
     assertEquals(
-        parse(float)({cs: '.123', pos: 0, args:{}}),
+        parse(float)({cs: '.123', pos: 0, attr:{}}),
         null
     );
     assertEquals(
-        parse(float)({cs: '.456e2', pos: 0, args:{}}),
+        parse(float)({cs: '.456e2', pos: 0, attr:{}}),
         null
     );
 });
@@ -168,7 +168,7 @@ Deno.test('float parser', () => {
 
 Deno.test('s-expr parser', () => {
     assertEquals(
-        parse(sexpr)({cs: 'one 2 3.0', pos: 0, args:{}}),
+        parse(sexpr)({cs: 'one 2 3.0', pos: 0, attr:{}}),
         {cs: 'one 2 3.0', pos: 4, result: {
             tag: "atom",
             atom: {
@@ -178,7 +178,7 @@ Deno.test('s-expr parser', () => {
         }}
     );
     assertEquals(
-        parse(sexpr)({cs: '(one (2 two) 3.0)', pos: 0, args:{}}),
+        parse(sexpr)({cs: '(one (2 two) 3.0)', pos: 0, attr:{}}),
         {cs: '(one (2 two) 3.0)', pos: 17, result: {
             tag: 'list',
             list: [{
@@ -223,13 +223,13 @@ Deno.test('symbol extraction', () => {
 Deno.test('show parser', () => { 
     assertEquals(
         show(many1(Either(OneOf('a'), OneOf('b')))),
-        "FMap(([f, x]) => f(x), (Product(FMap((t) => (ts) => [t, ...ts], (Either(OneOf('a'), OneOf('b'))), Fix(Either(FMap(([f, x]) => f(x), (Product(FMap((t) => (ts) => [t, ...ts], (Either(OneOf('a'), OneOf('b'))), Fail(''))), Return()))))"
+        "RMap(([f, x]) => f(x), (Product(RMap((t) => (ts) => [t, ...ts], (Either(OneOf('a'), OneOf('b'))), Fix(Either(RMap(([f, x]) => f(x), (Product(RMap((t) => (ts) => [t, ...ts], (Either(OneOf('a'), OneOf('b'))), Fail(''))), Return()))))"
     );
 });
 
 Deno.test('AppMap', () => {
     assertEquals(
-        parse(ArgMap(({n}:{n:number}) => ({n:n+1}), Return(0), FMap((m:number, {n}:{n:number}) => n+m, Return(1)))) ({cs: '', pos: 0, args: {n:1}}),
+        parse(LMap(({n}:{n:number}) => ({n:n+1}), Return(0), RMap((m:number, {n}:{n:number}) => n+m, Return(1)))) ({cs: '', pos: 0, attr: {n:1}}),
         {cs: '', pos:0, result: [0,3]}
     );
 });
