@@ -1,5 +1,5 @@
 import {assertEquals} from './test_deps.ts';
-import {string, parse, Fail, Empty, OneOf, Return, RMap, Product, Either, many, many1, between, symbols, show, token, integer, float, sexpr, LMap} from './parser.ts';
+import {tuple, string, parse, Fail, Empty, OneOf, Return, RMap, Product, Either, many, many1, between, symbols, show, token, integer, float, sexpr, LMap, First, constant} from './parser.ts';
 
 const empty = {cs: '', pos: 0, attr: {}};
 const text = {cs: 'a b ab aa bb c', pos: 0, attr: {}};
@@ -35,7 +35,7 @@ Deno.test('one-of parser', () => {
 
 Deno.test('return parser', () => {
     assertEquals(
-        parse(Return('a'))(text),
+        parse(Return(_ => 'a'))(text),
         {cs: 'a b ab aa bb c', pos: 0, result: 'a'}
     );
 });
@@ -223,13 +223,13 @@ Deno.test('symbol extraction', () => {
 Deno.test('show parser', () => { 
     assertEquals(
         show(many1(Either(OneOf('a'), OneOf('b')))),
-        "RMap(([f, x]) => f(x), (Product(RMap((t) => (ts) => [t, ...ts], (Either(OneOf('a'), OneOf('b'))), Fix(Either(RMap(([f, x]) => f(x), (Product(RMap((t) => (ts) => [t, ...ts], (Either(OneOf('a'), OneOf('b'))), Fail(''))), Return()))))"
+        "RMap(([f, x]) => f(x), (Product(RMap((t) => (ts) => [t, ...ts], (Either(OneOf('a'), OneOf('b'))), Fix(Either(RMap(([f, x]) => f(x), (Product(RMap((t) => (ts) => [t, ...ts], (Either(OneOf('a'), OneOf('b'))), Fail(''))), Return(_ => [])))))"
     );
 });
 
 Deno.test('AppMap', () => {
     assertEquals(
-        parse(LMap(({n}:{n:number}) => ({n:n+1}), Return(0), RMap((m:number, {n}:{n:number}) => n+m, Return(1)))) ({cs: '', pos: 0, attr: {n:1}}),
-        {cs: '', pos:0, result: [0,3]}
+        parse(LMap((x:number) => tuple(x,x), RMap(([m,n]) => n+m, First(Return(constant(1)))))) ({cs: '', pos: 0, attr: 1}),
+        {cs: '', pos:0, result: 2}
     );
 });

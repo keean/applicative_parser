@@ -9,14 +9,17 @@ type Right<A> = A extends [infer B, infer C] ? C : never;
 type Fail<A,B> = {tag: 'fail', exists: <R>(cont: (_: {fail: string}) => R) => R};
 type Empty<A,B> = {tag: 'empty', exists: <R>(cont: () => R) => R};
 type OneOf<A,B> = {tag: 'oneOf', exists: <R>(cont: (_: {oneOf: string}) => R) => R};
-type Return<A,B> = {tag: 'return', exists: <R>(cont: (_: {result: B}) => R) => R};
+type Return<A,B> = {tag: 'return', exists: <R>(cont: (_: {result: (_:A) => B}) => R) => R};
 type Forget<A,B> = {tag: 'forget', exists: <R>(cont: (_: {forget: Parser<A,B>}) => R) => R}
-type RMap<A,B> = {tag: 'rmap', exists: <R>(cont: <C>(_: {map: (_r:C,_a:A) => B, parser: Parser<A,C>}) => R) => R};
+type RMap<A,B> = {tag: 'rmap', exists: <R>(cont: <C>(_: {map: (_:C) => B, parser: Parser<A,C>}) => R) => R};
 type Product<A,B> = {tag: 'product', exists: <R>(cont: (_: {left: Parser<A,Left<B>>, right: Parser<A,Right<B>>}) => R) => R};
 type Either<A,B> = {tag: 'either', exists: <R>(cont: (_: {left: Parser<A,B>, right: Parser<A,B>}) => R) => R};
 type Fix<A,B> = {tag: 'fix', exists: <R>(cont: (_: {f: (_:Parser<A,B>) => Parser<A,B>}) => R) => R};
 type Raw<A,B> = {tag: 'raw', exists: <R>(cont: (_: {f: Parse<A,B>}) => R) => R};
-type LMap<A,B> = {tag: 'lmap', exists: <R>(cont: <C>(_: {map: (_a:A, _r:Left<B>) => C, left: Parser<A,Left<B>>, right: Parser<C,Right<B>>}) => R) => R};
+type LMap<A,B> = {tag: 'lmap', exists: <R>(cont: <C>(_: {map: (_a:A) => C, parser: Parser<C,B>}) => R) => R};
+type Compose<A,B> = {tag: 'compose', exists: <R>(cont: <C>(_: {left: Parser<A,C>, right: Parser<C,B>}) => R) => R};
+type First<A,B> = {tag: 'first', exists: <R>(cont: (_: {parser: Parser<Left<A>, Left<B>>}) => R) => R};
+type Second<A,B> = {tag: 'second', exists: <R>(cont: (_: {parser: Parser<Right<A>, Right<B>>}) => R) => R};
 
 /**
  * `Parser<A>` is the type of a parser combinator that returns a value with generic type `A`.
@@ -33,6 +36,9 @@ export type Parser<A,B> =
     | Fix<A,B> 
     | Raw<A,B>
     | LMap<A,B>
+    | Compose<A,B>
+    | First<A,B>
+    | Second<A,B>
     ;
 
 // Primitive parsers
@@ -61,7 +67,7 @@ export function OneOf<A,B>(oneOf: string): Parser<A,string> {
 /**
  * `Return` is constant parser that evalueates to `result` and cannot fail.
  */
-export function Return<A,B>(result: B): Parser<A,B> {
+export function Return<A,B>(result: (_:A) => B): Parser<A,B> {
     return {tag: 'return', exists: cont => cont({result})};
 }
 
@@ -81,7 +87,7 @@ export function Forget<A,B>(forget: Parser<A,B>): Parser<A,B> {
  * This is where the constuction of any output data structures occurs, for example
  * building an abstract syntax tree node from the results of a parser.
  */
-export function RMap<A,B,C>(map: (_r:C,_a:A) => B, parser: Parser<A,C>): Parser<A,B> {
+export function RMap<A,B,C>(map: (_:C) => B, parser: Parser<A,C>): Parser<A,B> {
     return {tag: 'rmap', exists: cont => cont({map, parser})};
 }
 
@@ -125,8 +131,20 @@ function Raw<A,B>(f: Parse<A,B>): Parser<A,B> {
  * `LMap` applies `map` to the attributes passed from the parent node in the 
  * parser tree structure.
  */
-export function LMap<A,B,C,D>(map: (_a:A, _r:D) => C, left: Parser<A,D>, right: Parser<C,B>): Parser<A,[D,B]> {
-    return {tag: 'lmap', exists: cont => cont({map, left, right})};
+export function LMap<A,B,C>(map: (_:A) => C, parser: Parser<C,B>): Parser<A,B> {
+    return {tag: 'lmap', exists: cont => cont({map, parser})};
+}
+
+export function Compose<A,B,C>(left: Parser<A,C>, right: Parser<C,B>): Parser<A,B> {
+    return {tag: 'compose', exists: cont => cont({left, right})};
+}
+
+export function First<A,B,C>(parser: Parser<A,B>): Parser<[A,C],[B,C]> {
+    return {tag: 'first', exists: cont => cont({parser})};
+}
+
+export function Second<A,B,C>(parser: Parser<A,B>): Parser<[C,A],[C,B]> {
+    return {tag: 'second', exists: cont => cont({parser})};
 }
 
 //----------------------------------------------------------------------------
@@ -150,6 +168,8 @@ export function show<A,B>(parser: Parser<A,B>): string {
             return parser.exists(p => `RMap(${p.map.toString().replace(/\s+/g, ' ')}, (${show(p.parser)})`);
         case 'product':
             return parser.exists(p => `Product(${show(p.left)}, ${show(p.right)})`);
+        case 'compose':
+            return parser.exists(p => `Compose(${show(p.left)}, ${show(p.right)})`);
         case 'either':
             return parser.exists(p => `Either(${show(p.left)}, ${show(p.right)})`);
         case 'fix':
@@ -157,7 +177,11 @@ export function show<A,B>(parser: Parser<A,B>): string {
         case 'raw':
             return '';
         case 'lmap':
-            return parser.exists(p => `LMap(${p.map.toString().replace(/\s+/g, ' ')}, (${show(p.left)}), (${show(p.right)})`);
+            return parser.exists(p => `LMap(${p.map.toString().replace(/\s+/g, ' ')}, (${show(p.parser)})`);
+        case 'first':
+            return parser.exists(p => `First(${show(p.parser)})`);
+        case 'second':
+            return parser.exists(p => `Second(${show(p.parser)})`);
     }
 }
 
@@ -180,6 +204,8 @@ export function symbols<A,B>(parser: Parser<A,B>): Set<string> {
             return parser.exists(p => symbols(p.parser));
         case 'product':
             return parser.exists(p => new Set([...symbols(p.left), ...symbols(p.right)]));
+        case 'compose':
+            return parser.exists(p => new Set([...symbols(p.left), ...symbols(p.right)]));
         case 'either':
             return parser.exists(p => new Set([...symbols(p.left), ...symbols(p.right)]));
         case 'fix':
@@ -187,13 +213,18 @@ export function symbols<A,B>(parser: Parser<A,B>): Set<string> {
         case 'raw':
             return new Set();
         case 'lmap':
-            return parser.exists(p => new Set([...symbols(p.left), ...symbols(p.right)]));
+            return parser.exists(p => symbols(p.parser));
+        case 'first':
+            return parser.exists(p => symbols(p.parser));
+        case 'second':
+            return parser.exists(p => symbols(p.parser));
     }
 }
    
 //----------------------------------------------------------------------------
 
-function constant<A,B>(x:A): (_:B) => A {
+// deno-lint-ignore no-explicit-any
+export function constant<A>(x:A): (_:any) => A {
     return _ => x;
 }
 
@@ -212,10 +243,13 @@ export function parse<A,B,P extends Parser<A,B>>(parser: P extends OneOf<A,B> ? 
 export function parse<A,B,P extends Parser<A,B>>(parser: P extends Forget<A,B> ? Parser<A,B> : never): Parse<A,B>;
 export function parse<A,B,P extends Parser<A,B>>(parser: P extends RMap<A,B> ? Parser<A,B> : never): Parse<A,B>;
 export function parse<A,B,P extends Parser<A,B>>(parser: P extends Product<A,B> ? Parser<A,B> : never): Parse<A,[Left<B>,Right<B>]>;
+export function parse<A,B,P extends Parser<A,B>>(parser: P extends Compose<A,B> ? Parser<A,B> : never): Parse<A,B>;
 export function parse<A,B,P extends Parser<A,B>>(parser: P extends Either<A,B> ? Parser<A,B> : never): Parse<A,B>;
 export function parse<A,B,P extends Parser<A,B>>(parser: P extends Fix<A,B> ? Parser<A,B> : never): Parse<A,B>;
 export function parse<A,B,P extends Parser<A,B>>(parser: P extends Raw<A,B> ? Parser<A,B> : never): Parse<A,B>;
 export function parse<A,B,P extends Parser<A,B>>(parser: P extends LMap<A,B> ? Parser<A,B> : never): Parse<A,B>;
+export function parse<A,B,P extends Parser<A,B>>(parser: P extends First<A,B> ? Parser<A,B> : never): Parse<[Left<A>,Right<A>],[Left<B>, Right<B>]>;
+export function parse<A,B,P extends Parser<A,B>>(parser: P extends Second<A,B> ? Parser<A,B> : never): Parse<[Left<A>,Right<A>],[Left<B>, Right<B>]>;
 /**
  * `parse` takes a statis parser-combinator Abstract Syntax Tree as its only argument, and compiles it
  * to a parser from input string and position, to parse result, input string, and position.
@@ -226,13 +260,13 @@ export function parse<A,B>(parser: Parser<A,B>): Parse<A,B|undefined|string|[Lef
         case 'fail':
             return parser.exists(() => constant(null));
         case 'empty':
-            return parser.exists(() => ({cs, pos}) => (pos >= cs.length) ? {result: undefined, cs, pos} : null);
+            return parser.exists(() => ({cs, pos}) => (pos >= cs.length) ? {cs, pos, result: undefined} : null);
         case 'return':
-            return parser.exists(p => ({cs, pos}) => ({cs, pos, result: p.result}));
+            return parser.exists(p => ({cs, pos, attr}) => ({cs, pos, result: p.result(attr)}));
         case 'oneOf':
-            return parser.exists(p => ({cs, pos}) => {
+            return parser.exists(p => ({cs, pos})=> {
                 const result = cs.charAt(pos);
-                return (result && p.oneOf.indexOf(result) >= 0) ? ({result, cs, pos: pos + 1}) : null;
+                return (result && p.oneOf.indexOf(result) >= 0) ? ({cs, pos: pos + 1, result}) : null;
             });
         case 'forget':
             return parser.exists(p => {
@@ -247,7 +281,7 @@ export function parse<A,B>(parser: Parser<A,B>): Parse<A,B|undefined|string|[Lef
                 const ep = parse(p.parser);
                 return state => {
                     const r = ep(state);
-                    return (r !== null) ? {...r, result: p.map(r.result, state.attr)} : null;
+                    return (r !== null) ? {cs: r.cs, pos: r.pos, result: p.map(r.result)} : null;
                 };
             });
         case 'product':
@@ -255,14 +289,21 @@ export function parse<A,B>(parser: Parser<A,B>): Parse<A,B|undefined|string|[Lef
                 const ep = parse(p.left);
                 const eq = parse(p.right);
                 return state => {
-                    const left = ep(state) 
-                    if (left !== null) {
-                        const right = eq({cs: left.cs, pos: left.pos, attr: state.attr});
-                        if (right !== null) {
-                            return {cs: right.cs, pos: right.pos, result: [left.result, right.result]};
-                        }
+                    const left = ep(state)
+                    if (left === null) {
+                        return null;
                     }
-                    return null;
+                    const right = eq({...left, attr: state.attr});
+                    return (right !== null) ? {...right, result: [left.result, right.result]} : null;
+                };
+            });
+        case 'compose':
+            return parser.exists(p => {
+                const ep = parse(p.left);
+                const eq = parse(p.right);
+                return state => {
+                    const left = ep(state) 
+                    return (left !== null) ? eq({...left, attr: left.result}) : null;
                 };
             });
         case 'either':
@@ -285,20 +326,60 @@ export function parse<A,B>(parser: Parser<A,B>): Parse<A,B|undefined|string|[Lef
             });
         case 'lmap':
             return parser.exists(p => {
-                const ep = parse(p.left);
-                const eq = parse(p.right);
+                const ep = parse(p.parser);
+                return ({cs, pos, attr}) => ep({cs, pos, attr: p.map(attr)});
+            });
+        case 'first':
+            return parser.exists(p => {
+                const ep = parse(p.parser);
                 return state => {
-                    const left = ep(state);
-                    if (left !== null) {
-                        const right = eq({cs: left.cs, pos: left.pos, attr: p.map(state.attr, left.result)});
-                        if (right !== null) {
-                            return {cs: right.cs, pos: right.pos, result: [left.result, right.result]};
-                        }
+                    const a = state.attr;
+                    if (!Array.isArray(a)) {
+                        return null;
                     } 
-                    return null;
+                    const r = ep({cs: state.cs, pos: state.pos, attr: a[0]});
+                    return (r !== null) ? {...r, result: [r.result, a[1]]} : null;
+                };
+            });
+        case 'second':
+            return parser.exists(p => {
+                const ep = parse(p.parser);
+                return ({cs, pos, attr}) => {
+                    if (!Array.isArray(attr)) {
+                        return null;
+                    }
+                    const r = ep({cs, pos, attr: attr[1]});
+                    return (r !== null) ? {cs: r.cs, pos: r.pos, result: [attr[0], r.result]} : null;
                 };
             });
     }
+}
+
+//----------------------------------------------------------------------------
+// Useful functions
+
+export function tuple<A extends unknown[]>(...x: A): A {
+    return x;
+}
+
+export function maybe<A>(x?:A): A|undefined {
+    return x as A|undefined;
+}
+
+export function singleton<A>(x:A): A[] {
+    return [x];
+}
+
+export function id<A>(x:A): A {
+    return x;
+}
+
+export function fst<A,B>([x,_] : [A,B]): A {
+    return x;
+}
+
+export function snd<A,B>([_,x] : [A,B]): B {
+    return x;
 }
 
 //----------------------------------------------------------------------------
@@ -308,7 +389,7 @@ export function parse<A,B>(parser: Parser<A,B>): Parse<A,B|undefined|string|[Lef
  * `opt` applies parser `p` and succeeds with default value `x` if it fails
  */
 export function opt<A,B>(p: Parser<A,B>, x: B): Parser<A,B> {
-    return Either(p, Return(x));
+    return Either(p, Return(_ => x));
 }
 
 /**
@@ -358,7 +439,7 @@ const arrayCons = <A>(t: A) => (ts: A[]) => [t, ...ts]
  */
 export function many<A,B>(p: Parser<A,B>) {
     return Fix<A,B[]>(many => 
-        Either(apply(RMap(arrayCons, p), many), Return<A,B[]>([])),
+        Either(apply(RMap(arrayCons, p), many), Return<A,B[]>(_ => [])),
     );
 }
 
@@ -378,6 +459,10 @@ export function between<A,B,C,D>(ps: Parser<A,B>, pe: Parser<A,C>, p: Parser<A,D
     return second(ps, first(p, pe));
 }
 
+export function parens<A,B>(p:Parser<A,B>): Parser<A,B> {
+    return between(token(OneOf('(')), token(OneOf(')')), p);
+}
+
 /**
  * `spaces` succeeds if there are one or more spaces, otherwise fails
  */
@@ -394,9 +479,18 @@ export const optSpaces: Parser<any, string[]> = many(OneOf('\n\r\t '));
  * `string` matches string `s` or fails.
  */
 // deno-lint-ignore no-explicit-any
-export function string(s: string): Parser<any ,string> {
+export function string(s: string): Parser<any, string> {
     // deno-lint-ignore no-explicit-any
-    return RMap(cs => cs.join(''), Array.from(s).reduceRight((cs, c) => apply(RMap(arrayCons, OneOf(c)), cs), Return<any, string[]>([])));
+    return RMap(cs => cs.join(''), Array.from(s).reduceRight((cs, c) => apply(RMap(arrayCons, OneOf(c)), cs), Return<any, string[]>(_ => [])));
+}
+
+// deno-lint-ignore no-explicit-any
+export function except(x: string): Parser<any, string> {
+    return OneOf([...Array.from(Array(65536).keys(), y => String.fromCharCode(y))].filter(c => x.indexOf(c) < 0).join(''));
+}
+
+export function quotedString<A>(): Parser<A,string> {
+    return token(between(string('"'), string('"'), except('"')));
 }
 
 /**
@@ -429,7 +523,7 @@ const tupleCons: <T>(t: T) => <TS extends unknown[]>(ts: TS) => readonly [T, ...
  */
 // deno-lint-ignore no-explicit-any
 export function seq<T extends Parser<any,any>[]>(...parsers: T): Parser<UnwrapArg<T>, UnwrapParsers<T>> {
-    return parsers.reduceRight((ps, p) => apply(RMap(tupleCons, p), ps), Return([]));
+    return parsers.reduceRight((ps, p) => apply(RMap(tupleCons, p), ps), Return(_ => []));
 }
 
 /**
@@ -442,8 +536,8 @@ export function seq<T extends Parser<any,any>[]>(...parsers: T): Parser<UnwrapAr
  * return a different type.
  */
 // deno-lint-ignore no-explicit-any
-export function seqMap<A,T extends Parser<any, any>[]>(map: (..._: [...UnwrapParsers<T>, UnwrapArg<T>]) => A, ...parsers: T): Parser<UnwrapArg<T>, A> {
-    return RMap((x, y) => map(...x, y), seq(...parsers));
+export function seqMap<A,T extends Parser<any, any>[]>(map: (..._: [...UnwrapParsers<T>]) => A, ...parsers: T): Parser<UnwrapArg<T>, A> {
+    return RMap(x => map(...x), seq(...parsers));
 }
 
 //----------------------------------------------------------------------------
@@ -523,12 +617,12 @@ const specialChar = '()\n\r\t\" ';
 const isRegular = [...Array.from(Array(256).keys(), x => String.fromCharCode(x))].filter(c => specialChar.indexOf(c) < 0).join('');
 const regularChar = OneOf(isRegular);
 const regularString = RMap(x => x.join(''), many1(regularChar));
-const quotedString = RMap(x => x.join(''), between(quote, quote, many(choice(regularChar, space, leftParen, rightParen))));
+const squotedString = RMap(x => x.join(''), between(quote, quote, many(choice(regularChar, space, leftParen, rightParen))));
 const endNum = Forget(choice(Empty<unknown, string>(), space, rightParen)); 
 const atom = choice(
     RMap(MkInt, first(integer, endNum)),
     RMap(MkFloat, first(float, endNum)),
-    RMap(MkString, quotedString),
+    RMap(MkString, squotedString),
     RMap(MkSymbol, regularString),
 );
 const expr = (sexpr: Parser<unknown,SExp>) => Either(
