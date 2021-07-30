@@ -6,11 +6,12 @@
 type Left<A> = A extends [infer B, infer C] ? B : never;
 type Right<A> = A extends [infer B, infer C] ? C : never;
 
+type Try<A,B> = {tag: 'try', exists: <R>(cont: (_: {parser: Parser<A,B>}) => R) => R};
 type Fail<A,B> = {tag: 'fail', exists: <R>(cont: (_: {fail: string}) => R) => R};
 type Empty<A,B> = {tag: 'empty', exists: <R>(cont: () => R) => R};
 type OneOf<A,B> = {tag: 'oneOf', exists: <R>(cont: (_: {oneOf: string}) => R) => R};
 type Return<A,B> = {tag: 'return', exists: <R>(cont: (_: {result: (_:A) => B}) => R) => R};
-type Forget<A,B> = {tag: 'forget', exists: <R>(cont: (_: {forget: Parser<A,B>}) => R) => R}
+type Forget<A,B> = {tag: 'forget', exists: <R>(cont: (_: {forget: Parser<A,B>}) => R) => R};
 type RMap<A,B> = {tag: 'rmap', exists: <R>(cont: <C>(_: {map: (_:C) => B, parser: Parser<A,C>}) => R) => R};
 type Product<A,B> = {tag: 'product', exists: <R>(cont: (_: {left: Parser<A,Left<B>>, right: Parser<A,Right<B>>}) => R) => R};
 type Either<A,B> = {tag: 'either', exists: <R>(cont: (_: {left: Parser<A,B>, right: Parser<A,B>}) => R) => R};
@@ -25,6 +26,7 @@ type Second<A,B> = {tag: 'second', exists: <R>(cont: (_: {parser: Parser<Right<A
  * `Parser<A>` is the type of a parser combinator that returns a value with generic type `A`.
  */
 export type Parser<A,B> =
+    | Try<A,B>
     | Fail<A,B>
     | Empty<A,B>
     | OneOf<A,B>
@@ -33,7 +35,7 @@ export type Parser<A,B> =
     | RMap<A,B>
     | Product<A,B> 
     | Either<A,B>
-    | Fix<A,B> 
+    | Fix<A,B>
     | Raw<A,B>
     | LMap<A,B>
     | Compose<A,B>
@@ -42,6 +44,13 @@ export type Parser<A,B> =
     ;
 
 // Primitive parsers
+
+/**
+ * `Try` backtracks the parser if it fails, so another option can be tried.
+ */
+export function Try<A,B>(parser: Parser<A,B>): Parser<A,B> {
+    return {tag: 'try', exists: cont => cont({parser})};
+}
 
 /**
  * `Fail` parser consumes no input and always fails, with error message `fail`.
@@ -160,6 +169,8 @@ export function show<A,B>(parser: Parser<A,B>): string {
             return 'Empty()';
         case 'return':
             return parser.exists(p => `Return(${p.result})`);
+        case 'try':
+            return parser.exists(p => `Try(${show(p.parser)})`);
         case 'forget':
             return parser.exists(p => `Forget(${show(p.forget)})`);
         case 'oneOf':
@@ -196,6 +207,8 @@ export function symbols<A,B>(parser: Parser<A,B>): Set<string> {
         case 'empty':
         case 'return':
             return new Set();
+        case 'try':
+            return parser.exists(p => symbols(p.parser));
         case 'forget':
             return parser.exists(p => symbols(p.forget));
         case 'oneOf':
@@ -228,14 +241,25 @@ export function constant<A>(x:A): (_:any) => A {
     return _ => x;
 }
 
+export type Result<A> = {result?: A, cs: string, pos: number, errors: Error[]};
+export function Result<A>(result: A|undefined, cs: string, pos: number, errors: Error[]): Result<A> {
+    return {result, cs, pos, errors};
+}
+
+export type Error = {error: string, pos: number};
+export function Error(error: string, pos: number): Error {
+    return {error, pos};
+}
+
 /**
  * `Parse` is the type returned by the `parse` function, which takes an input string `cs`,
  * a position `pos`, and the inherited attributes `attr` passed to the root of the parser,
  * and returns the input string, the updated position, and the result of the 
  * parser. 
  */
-export type Parse<A,B> = (_: {cs: string, pos: number, attr: A}) => {result: B, cs: string, pos: number}|null;
+export type Parse<A,B> = (_: {cs: string, pos: number, attr: A}) => Result<B>;
 
+export function parse<A,B,P extends Parser<A,B>>(parser: P extends Try<A,B> ? Parser<A,B> : never): Parse<A,B>;
 export function parse<A,B,P extends Parser<A,B>>(parser: P extends Fail<A,B> ? Parser<A,B> : never): Parse<A,B>;
 export function parse<A,B,P extends Parser<A,B>>(parser: P extends Empty<A,B> ? Parser<A,B> : never): Parse<A,undefined>;
 export function parse<A,B,P extends Parser<A,B>>(parser: P extends Return<A,B> ? Parser<A,B> : never): Parse<A,B>;
@@ -255,25 +279,39 @@ export function parse<A,B,P extends Parser<A,B>>(parser: P extends Second<A,B> ?
  * to a parser from input string and position, to parse result, input string, and position.
  * see `Parse` type for the details of the type of the resulting parser. 
  */
-export function parse<A,B>(parser: Parser<A,B>): Parse<A,B|undefined|string|[Left<B>,Right<B>]> {
+export function parse<A,B>(parser: Parser<A,B>): Parse<A,B|undefined|null|string|[Left<B>,Right<B>]> {
     switch (parser.tag) {
         case 'fail':
-            return parser.exists(() => constant(null));
+            return parser.exists(p => ({cs, pos}) => 
+                Result(undefined, cs, pos, [Error(p.fail, pos)]));
         case 'empty':
-            return parser.exists(() => ({cs, pos}) => (pos >= cs.length) ? {cs, pos, result: undefined} : null);
+            return parser.exists(() => ({cs, pos}) => (pos >= cs.length)
+                ? Result(null, cs, pos, []) 
+                : Result(undefined, cs, pos, [Error('expected end-of-file', pos)]));
         case 'return':
-            return parser.exists(p => ({cs, pos, attr}) => ({cs, pos, result: p.result(attr)}));
+            return parser.exists(p => ({cs, pos, attr}) => 
+                Result(p.result(attr), cs, pos, []));
         case 'oneOf':
             return parser.exists(p => ({cs, pos})=> {
                 const result = cs.charAt(pos);
-                return (result && p.oneOf.indexOf(result) >= 0) ? ({cs, pos: pos + 1, result}) : null;
+                return (result && p.oneOf.indexOf(result) >= 0) 
+                    ? Result(result, cs, pos + 1, []) 
+                    : Result(undefined, cs, pos, [Error(`expected one of "${p.oneOf}"`, pos)]);
+            });
+        case 'try':
+            return parser.exists(p => {
+                const ep = parse(p.parser);
+                return state => {
+                    const r = ep(state);
+                    return (r.result === undefined) ? Result(r.result, state.cs, state.pos, r.errors) : r;
+                };
             });
         case 'forget':
             return parser.exists(p => {
                 const ep = parse(p.forget);
                 return state => {
                     const r = ep(state);
-                    return (r !== null) ? {cs: state.cs, pos: state.pos, result: r.result} : null;
+                    return Result(r.result, state.cs, state.pos, []); 
                 };
             });
         case 'rmap':
@@ -281,7 +319,7 @@ export function parse<A,B>(parser: Parser<A,B>): Parse<A,B|undefined|string|[Lef
                 const ep = parse(p.parser);
                 return state => {
                     const r = ep(state);
-                    return (r !== null) ? {cs: r.cs, pos: r.pos, result: p.map(r.result)} : null;
+                    return Result((r.result !== undefined) ? p.map(r.result) : undefined, r.cs, r.pos, r.errors);
                 };
             });
         case 'product':
@@ -290,11 +328,11 @@ export function parse<A,B>(parser: Parser<A,B>): Parse<A,B|undefined|string|[Lef
                 const eq = parse(p.right);
                 return state => {
                     const left = ep(state)
-                    if (left === null) {
-                        return null;
+                    if (left.result === undefined) {
+                        return Result(undefined, left.cs, left.pos, left.errors);
                     }
                     const right = eq({...left, attr: state.attr});
-                    return (right !== null) ? {...right, result: [left.result, right.result]} : null;
+                    return Result((right.result !== undefined) ? [left.result, right.result] : undefined, right.cs, right.pos, left.errors.concat(right.errors));
                 };
             });
         case 'compose':
@@ -302,8 +340,11 @@ export function parse<A,B>(parser: Parser<A,B>): Parse<A,B|undefined|string|[Lef
                 const ep = parse(p.left);
                 const eq = parse(p.right);
                 return state => {
-                    const left = ep(state) 
-                    return (left !== null) ? eq({...left, attr: left.result}) : null;
+                    const left = ep(state)
+                    if (left.result === undefined) {
+                        return Result(undefined, left.cs, left.pos, left.errors);
+                    } 
+                    return eq({...left, attr: left.result});
                 };
             });
         case 'either':
@@ -312,7 +353,7 @@ export function parse<A,B>(parser: Parser<A,B>): Parse<A,B|undefined|string|[Lef
                 const eq = parse(p.right);
                 return state => {
                     const left = ep(state);
-                    return (left === null) ? eq(state) : left;
+                    return (left.result === undefined && state.pos === left.pos) ? eq(state) : left;
                 };
             });
         case 'fix':
@@ -332,24 +373,23 @@ export function parse<A,B>(parser: Parser<A,B>): Parse<A,B|undefined|string|[Lef
         case 'first':
             return parser.exists(p => {
                 const ep = parse(p.parser);
-                return state => {
-                    const a = state.attr;
-                    if (!Array.isArray(a)) {
-                        return null;
+                return ({cs, pos, attr}) => {
+                    if (!(Array.isArray(attr) && attr.length > 1)) {
+                        throw 'this should never happen';
                     } 
-                    const r = ep({cs: state.cs, pos: state.pos, attr: a[0]});
-                    return (r !== null) ? {...r, result: [r.result, a[1]]} : null;
+                    const r = ep({cs, pos, attr: attr[0]});
+                    return Result((r.result !== undefined) ? [r.result, attr[1]] : undefined, r.cs, r.pos, r.errors);
                 };
             });
         case 'second':
             return parser.exists(p => {
                 const ep = parse(p.parser);
                 return ({cs, pos, attr}) => {
-                    if (!Array.isArray(attr)) {
-                        return null;
+                    if (!(Array.isArray(attr) && attr.length > 1)) {
+                        throw 'this should never happen';
                     }
                     const r = ep({cs, pos, attr: attr[1]});
-                    return (r !== null) ? {cs: r.cs, pos: r.pos, result: [attr[0], r.result]} : null;
+                    return Result((r.result !== undefined) ? [attr[0], r.result]: undefined, r.cs, r.pos, r.errors);
                 };
             });
     }
@@ -389,14 +429,22 @@ export function snd<A,B>([_,x] : [A,B]): B {
  * `opt` applies parser `p` and succeeds with default value `x` if it fails
  */
 export function opt<A,B>(p: Parser<A,B>, x: B): Parser<A,B> {
-    return Either(p, Return(_ => x));
+    return trap(p, Return(_ => x));
+}
+
+export function trap<A,B>(left: Parser<A,B>, right: Parser<A,B>): Parser<A,B> {
+    return Either(Try(left), right);
+}
+
+export function branch<A,B>(...ps: Array<Parser<A,B>>): Parser<A,B> {
+    return ps.reduceRight((acc, x) => Either(x, acc), Fail(''));
 }
 
 /**
  * `choice` tries each parser in turn, returning the first success, or failing if none succeed.
  */
 export function choice<A,B>(...ps: Array<Parser<A,B>>): Parser<A,B> {
-    return ps.reduceRight((acc, x) => Either(x, acc), Fail(''));
+    return ps.reduceRight((acc, x) => trap(x, acc), Fail(''));
 }
 
 // Infix operators, not implementable in typescript, use prefix forms:
@@ -439,7 +487,7 @@ const arrayCons = <A>(t: A) => (ts: A[]) => [t, ...ts]
  */
 export function many<A,B>(p: Parser<A,B>) {
     return Fix<A,B[]>(many => 
-        Either(apply(RMap(arrayCons, p), many), Return<A,B[]>(_ => [])),
+        trap(apply(RMap(arrayCons, p), many), Return<A,B[]>(_ => [])),
     );
 }
 
@@ -625,7 +673,7 @@ const atom = choice(
     RMap(MkString, squotedString),
     RMap(MkSymbol, regularString),
 );
-const expr = (sexpr: Parser<unknown,SExp>) => Either(
+const expr = (sexpr: Parser<unknown,SExp>) => trap(
     RMap(MkList, between(leftParen, rightParen, many(sexpr))),
     RMap(MkAtom, atom)
 );

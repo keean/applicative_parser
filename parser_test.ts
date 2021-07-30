@@ -1,5 +1,5 @@
 import {assertEquals} from './test_deps.ts';
-import {tuple, string, parse, Fail, Empty, OneOf, Return, RMap, Product, Either, many, many1, between, symbols, show, token, integer, float, sexpr, LMap, First, constant} from './parser.ts';
+import {Error, tuple, string, parse, Fail, Empty, OneOf, Return, RMap, Product, many, many1, between, symbols, show, token, integer, float, sexpr, LMap, First, constant, Result, trap} from './parser.ts';
 
 const empty = {cs: '', pos: 0, attr: {}};
 const text = {cs: 'a b ab aa bb c', pos: 0, attr: {}};
@@ -7,161 +7,161 @@ const text = {cs: 'a b ab aa bb c', pos: 0, attr: {}};
 Deno.test('fail parser', () => {
     assertEquals(
         parse(Fail('failure message'))(text),
-        null
+        Result(undefined, 'a b ab aa bb c', 0, [Error("failure message", 0)])
     );
 });
 
 Deno.test('empty parser', () => {
     assertEquals(
         parse(Empty())(empty),
-        {cs: '', pos: 0, result: undefined}
+        Result(null, '', 0, [])
     );
     assertEquals(
         parse(Empty())(text),
-        null
+        Result(undefined, 'a b ab aa bb c', 0, [Error('expected end-of-file', 0)])
     );
 });
 
 Deno.test('one-of parser', () => {
     assertEquals(
         parse(OneOf('a'))(text),
-        {cs: 'a b ab aa bb c', pos: 1, result: 'a'}
+        Result('a', 'a b ab aa bb c', 1, [])
     );
     assertEquals(
         parse(OneOf('b'))(text),
-        null
+        Result(undefined, 'a b ab aa bb c', 0, [Error('expected one of "b"',0)])
     );
 });
 
 Deno.test('return parser', () => {
     assertEquals(
         parse(Return(_ => 'a'))(text),
-        {cs: 'a b ab aa bb c', pos: 0, result: 'a'}
+        Result('a', 'a b ab aa bb c', 0, [])
     );
 });
 
 Deno.test('fmap parser', () => {
     assertEquals(
         parse(RMap(() => ({}), OneOf('a')))(text),
-        {cs: 'a b ab aa bb c', pos: 1, result: {}}
+        Result({}, 'a b ab aa bb c', 1, [])
     );
     assertEquals(
         parse(RMap(() => ({}), OneOf('b')))(text),
-        null
+        Result(undefined, 'a b ab aa bb c', 0, [Error('expected one of "b"', 0)])
     );
     assertEquals(
         parse(RMap(c => c.length, OneOf('a')))(text),
-        {cs: 'a b ab aa bb c', pos: 1, result: 1}
+        Result(1, 'a b ab aa bb c', 1, [])
     )         
     assertEquals(
         parse(RMap(s => s.toUpperCase(), RMap(c => c + c, OneOf('a'))))(text),
-        {cs: 'a b ab aa bb c', pos: 1, result: 'AA'}
+        Result('AA', 'a b ab aa bb c', 1, [])
     );
 });
 
 Deno.test('product parser', () => {
     assertEquals(
         parse(Product(token(string('a')), token(string('b'))))(text),
-        {cs: 'a b ab aa bb c', pos: 4, result: ['a', 'b']}
+        Result(['a', 'b'], 'a b ab aa bb c', 4, [])
     );
     assertEquals(
         parse(Product(token(string('b')), token(string('b'))))(text),
-        null
+        Result(undefined, 'a b ab aa bb c', 0, [Error('expected one of "b"', 0)])
     );
     assertEquals(
         parse(Product(token(string('a')), token(string('a'))))(text),
-        null
+        Result(undefined, 'a b ab aa bb c', 2, [Error('expected one of "a"', 2)])
     );
     assertEquals(
         parse(Product(token(string('b')), token(string('a'))))(text),
-        null
+        Result(undefined, 'a b ab aa bb c', 0, [Error('expected one of "b"', 0)])
     );
 });
 
 Deno.test('either parser', () => {
     assertEquals(
-        parse(Either(OneOf('a'), OneOf('a')))(text),
-        {cs: 'a b ab aa bb c', pos: 1, result: 'a'}
+        parse(trap(OneOf('a'), OneOf('a')))(text),
+        Result('a', 'a b ab aa bb c', 1, [])
     );
     assertEquals(
-        parse(Either(OneOf('a'), OneOf('b')))(text),
-        {cs: 'a b ab aa bb c', pos: 1, result: 'a'}
+        parse(trap(OneOf('a'), OneOf('b')))(text),
+        Result('a', 'a b ab aa bb c', 1, [])
     );
     assertEquals(
-        parse(Either(OneOf('b'), OneOf('a')))(text),
-        {cs: 'a b ab aa bb c', pos: 1, result: 'a'}
+        parse(trap(OneOf('b'), OneOf('a')))(text),
+        Result('a', 'a b ab aa bb c', 1, [])
     );
     assertEquals(
-        parse(Either(OneOf('b'), OneOf('b')))(text),
-        null
+        parse(trap(OneOf('b'), OneOf('b')))(text),
+        Result(undefined, 'a b ab aa bb c', 0, [Error('expected one of "b"', 0)])
     );
 });
 
 Deno.test('many parser', () => {
     assertEquals(
-        parse(many(Either(token(string('a')), token(string('b')))))(text),
-        {cs: 'a b ab aa bb c', pos: 13, result: ['a', 'b', 'a', 'b', 'a', 'a', 'b', 'b']}
+        parse(many(trap(token(string('a')), token(string('b')))))(text),
+        Result(['a', 'b', 'a', 'b', 'a', 'a', 'b', 'b'], 'a b ab aa bb c', 13, [])
     );
     assertEquals(
         parse(many(token(string('c'))))(text),
-        {cs: 'a b ab aa bb c', pos: 0, result: []}
+        Result([], 'a b ab aa bb c', 0, [])
     );
     assertEquals(
-        parse(many1(Either(token(string('a')), token(string('b')))))(text),
-        {cs: 'a b ab aa bb c', pos: 13, result: ['a', 'b', 'a', 'b', 'a', 'a', 'b', 'b']}
+        parse(many1(trap(token(string('a')), token(string('b')))))(text),
+        Result(['a', 'b', 'a', 'b', 'a', 'a', 'b', 'b'], 'a b ab aa bb c', 13, [])
     );
     assertEquals(
         parse(many1(token(string('c'))))(text),
-        null
+        Result(undefined, 'a b ab aa bb c', 0, [Error('expected one of "c"', 0)])
     );
 });
 
 Deno.test('between parser', () => {
     assertEquals(
         parse(between(OneOf('('), OneOf(')'), many(OneOf('a'))))({cs: '(aa)', pos: 0, attr:{}}),
-        {cs: '(aa)', pos: 4, result: ['a', 'a']}
+        Result(['a', 'a'], '(aa)', 4, [])
     );
 })
 
 Deno.test('integer parser', () => {
     assertEquals(
         parse(integer)({cs: '123456abc', pos: 0, attr:{}}),
-        {cs: '123456abc', pos: 6, result: 123456}
+        Result(123456, '123456abc', 6, [])
     );
 });
 
 Deno.test('float parser', () => {
     assertEquals(
         parse(float)({cs: '123.', pos: 0, attr:{}}),
-        {cs: '123.', pos: 4, result: 123}
+        Result(123, '123.', 4, [])
     );
     assertEquals(
         parse(float)({cs: '123.456', pos: 0, attr:{}}),
-        {cs: '123.456', pos: 7, result: 123.456}
+        Result(123.456, '123.456', 7, [])
     );
     assertEquals(
         parse(float)({cs: '123.456e2', pos: 0, attr:{}}),
-        {cs: '123.456e2', pos: 9, result: 12345.6}
+        Result(12345.6, '123.456e2', 9, [])
     )
     assertEquals(
         parse(float)({cs: '123e2', pos: 0, attr:{}}),
-        {cs: '123e2', pos: 5, result: 12300}
+        Result(12300, '123e2', 5, [])
     );
     assertEquals(
         parse(float)({cs: '123.e2', pos: 0, attr:{}}),
-        {cs: '123.e2', pos: 4, result: 123}
+        Result(123, '123.e2', 4, [])
     );
     assertEquals(
-        parse(float)({cs: '123', pos: 0, attr:{}}),
-        null
+        parse(float)({cs: '123.', pos: 0, attr:{}}),
+        Result(123, '123.', 4, [])
     );
     assertEquals(
         parse(float)({cs: '.123', pos: 0, attr:{}}),
-        null
+        Result(undefined, '.123', 0, [Error('', 0)])
     );
     assertEquals(
         parse(float)({cs: '.456e2', pos: 0, attr:{}}),
-        null
+        Result(undefined, '.456e2', 0, [Error('', 0)])
     );
 });
 
@@ -169,17 +169,17 @@ Deno.test('float parser', () => {
 Deno.test('s-expr parser', () => {
     assertEquals(
         parse(sexpr)({cs: 'one 2 3.0', pos: 0, attr:{}}),
-        {cs: 'one 2 3.0', pos: 4, result: {
+        Result({
             tag: "atom",
             atom: {
                 symbol: "one",
                 tag: "symbol",
             },
-        }}
+        }, 'one 2 3.0', 4, [])
     );
     assertEquals(
         parse(sexpr)({cs: '(one (2 two) 3.0)', pos: 0, attr:{}}),
-        {cs: '(one (2 two) 3.0)', pos: 17, result: {
+        Result({
             tag: 'list',
             list: [{
                 tag: "atom",
@@ -209,27 +209,27 @@ Deno.test('s-expr parser', () => {
                     tag: "float",
                 },
             }]
-        }}
+        }, '(one (2 two) 3.0)', 17, [])
     );
 });
 
 Deno.test('symbol extraction', () => { 
     assertEquals(
-        symbols(many1(Either(OneOf('a'), OneOf('b')))),
+        symbols(many1(trap(OneOf('a'), OneOf('b')))),
         new Set(['a', 'b'])
     );
 });
 
 Deno.test('show parser', () => { 
     assertEquals(
-        show(many1(Either(OneOf('a'), OneOf('b')))),
-        "RMap(([f, x]) => f(x), (Product(RMap((t) => (ts) => [t, ...ts], (Either(OneOf('a'), OneOf('b'))), Fix(Either(RMap(([f, x]) => f(x), (Product(RMap((t) => (ts) => [t, ...ts], (Either(OneOf('a'), OneOf('b'))), Fail(''))), Return(_ => [])))))"
+        show(many1(trap(OneOf('a'), OneOf('b')))),
+        "RMap(([f, x]) => f(x), (Product(RMap((t) => (ts) => [t, ...ts], (Either(Try(OneOf('a')), OneOf('b'))), Fix(Either(Try(RMap(([f, x]) => f(x), (Product(RMap((t) => (ts) => [t, ...ts], (Either(Try(OneOf('a')), OneOf('b'))), Fail('')))), Return(_ => [])))))"
     );
 });
 
 Deno.test('AppMap', () => {
     assertEquals(
         parse(LMap((x:number) => tuple(x,x), RMap(([m,n]) => n+m, First(Return(constant(1)))))) ({cs: '', pos: 0, attr: 1}),
-        {cs: '', pos:0, result: 2}
+        Result(2, '', 0, [])
     );
 });
