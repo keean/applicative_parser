@@ -62,7 +62,7 @@ export function Fail<A,B>(fail: string): Parser<A,B> {
 /**
  * `Empty` parser matches end-of-file or fails.
  */
-export function Empty<A,B>(): Parser<A, B> {
+export function Empty<A,B>(): Parser<A,B> {
     return {tag: 'empty', exists: cont => cont()};
 }
 
@@ -261,7 +261,7 @@ export type Parse<A,B> = (_: {cs: string, pos: number, attr: A}) => Result<B>;
 
 export function parse<A,B,P extends Parser<A,B>>(parser: P extends Try<A,B> ? Parser<A,B> : never): Parse<A,B>;
 export function parse<A,B,P extends Parser<A,B>>(parser: P extends Fail<A,B> ? Parser<A,B> : never): Parse<A,B>;
-export function parse<A,B,P extends Parser<A,B>>(parser: P extends Empty<A,B> ? Parser<A,B> : never): Parse<A,undefined>;
+export function parse<A,B,P extends Parser<A,B>>(parser: P extends Empty<A,B> ? Parser<A,B> : never): Parse<A,null>;
 export function parse<A,B,P extends Parser<A,B>>(parser: P extends Return<A,B> ? Parser<A,B> : never): Parse<A,B>;
 export function parse<A,B,P extends Parser<A,B>>(parser: P extends OneOf<A,B> ? Parser<A,B> : never): Parse<A,string>;
 export function parse<A,B,P extends Parser<A,B>>(parser: P extends Forget<A,B> ? Parser<A,B> : never): Parse<A,B>;
@@ -303,7 +303,7 @@ export function parse<A,B>(parser: Parser<A,B>): Parse<A,B|undefined|null|string
                 const ep = parse(p.parser);
                 return state => {
                     const r = ep(state);
-                    return (r.result === undefined) ? Result(r.result, state.cs, state.pos, r.errors) : r;
+                    return (r.result === undefined) ? Result(r.result, state.cs, state.pos, []) : r;
                 };
             });
         case 'forget':
@@ -343,8 +343,9 @@ export function parse<A,B>(parser: Parser<A,B>): Parse<A,B|undefined|null|string
                     const left = ep(state)
                     if (left.result === undefined) {
                         return Result(undefined, left.cs, left.pos, left.errors);
-                    } 
-                    return eq({...left, attr: left.result});
+                    }
+                    const right = eq({...left, attr: left.result});
+                    return Result(right.result, right.cs, right.pos, left.errors.concat(right.errors));
                 };
             });
         case 'either':
@@ -353,7 +354,13 @@ export function parse<A,B>(parser: Parser<A,B>): Parse<A,B|undefined|null|string
                 const eq = parse(p.right);
                 return state => {
                     const left = ep(state);
-                    return (left.result === undefined && state.pos === left.pos) ? eq(state) : left;
+                    if (left.result !== undefined || left.pos > state.pos) {
+                        return left;
+                    }
+                    const right = eq(state);
+                    return (right.result === undefined)
+                        ? Result(right.result, right.cs, right.pos, left.errors.concat(right.errors))
+                        : right;
                 };
             });
         case 'fix':
@@ -402,8 +409,8 @@ export function tuple<A extends unknown[]>(...x: A): A {
     return x;
 }
 
-export function maybe<A>(x?:A): A|undefined {
-    return x as A|undefined;
+export function maybe<A>(x?:A): A|null {
+    return x ?? null as A|null;
 }
 
 export function singleton<A>(x:A): A[] {
@@ -487,7 +494,7 @@ const arrayCons = <A>(t: A) => (ts: A[]) => [t, ...ts]
  */
 export function many<A,B>(p: Parser<A,B>) {
     return Fix<A,B[]>(many => 
-        trap(apply(RMap(arrayCons, p), many), Return<A,B[]>(_ => [])),
+        Either(Try(apply(RMap(arrayCons, p), many)), Return<A,B[]>(_ => [])),
     );
 }
 
