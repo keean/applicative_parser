@@ -3,8 +3,13 @@
  * @module parser
  */
 
+//// deno-lint-ignore no-explicit-any
+type Top = unknown;
+
 type Left<A> = A extends [infer B, infer C] ? B : never;
 type Right<A> = A extends [infer B, infer C] ? C : never;
+
+
 
 type Try<A,B> = {tag: 'try', exists: <R>(cont: (_: {parser: Parser<A,B>}) => R) => R};
 type Fail<A,B> = {tag: 'fail', exists: <R>(cont: (_: {fail: string}) => R) => R};
@@ -13,7 +18,7 @@ type OneOf<A,B> = {tag: 'oneOf', exists: <R>(cont: (_: {oneOf: string}) => R) =>
 type Return<A,B> = {tag: 'return', exists: <R>(cont: (_: {result: (_:A) => B}) => R) => R};
 type Forget<A,B> = {tag: 'forget', exists: <R>(cont: (_: {forget: Parser<A,B>}) => R) => R};
 type RMap<A,B> = {tag: 'rmap', exists: <R>(cont: <C>(_: {map: (_:C) => B, parser: Parser<A,C>}) => R) => R};
-type Product<A,B> = {tag: 'product', exists: <R>(cont: (_: {left: Parser<A,Left<B>>, right: Parser<A,Right<B>>}) => R) => R};
+type Cartesian<A,B> = {tag: 'cartesian', exists: <R>(cont: (_: {left: Parser<Left<A>,Left<B>>, right: Parser<Right<A>,Right<B>>}) => R) => R};
 type Either<A,B> = {tag: 'either', exists: <R>(cont: (_: {left: Parser<A,B>, right: Parser<A,B>}) => R) => R};
 type Fix<A,B> = {tag: 'fix', exists: <R>(cont: (_: {f: (_:Parser<A,B>) => Parser<A,B>}) => R) => R};
 type Raw<A,B> = {tag: 'raw', exists: <R>(cont: (_: {f: Parse<A,B>}) => R) => R};
@@ -33,7 +38,7 @@ export type Parser<A,B> =
     | Return<A,B>
     | Forget<A,B>
     | RMap<A,B>
-    | Product<A,B> 
+    | Cartesian<A,B> 
     | Either<A,B>
     | Fix<A,B>
     | Raw<A,B>
@@ -55,21 +60,21 @@ export function Try<A,B>(parser: Parser<A,B>): Parser<A,B> {
 /**
  * `Fail` parser consumes no input and always fails, with error message `fail`.
  */
-export function Fail<A,B>(fail: string): Parser<A,B> {
+export function Fail<A,B=undefined>(fail: string): Parser<A,B> {
     return {tag: 'fail', exists: cont => cont({fail})};
 }
 
 /**
  * `Empty` parser matches end-of-file or fails.
  */
-export function Empty<A,B>(): Parser<A,B> {
+export function Empty<A,B=null>(): Parser<A,B> {
     return {tag: 'empty', exists: cont => cont()};
 }
 
 /**
  * `OneOf` parser consumes one character if it is in the `oneOf` string argument or fails.
  */
-export function OneOf<A,B>(oneOf: string): Parser<A,string> {
+export function OneOf<A,B=string>(oneOf: string): Parser<A,string> {
     return {tag: 'oneOf', exists: cont => cont({oneOf})};
 }
 
@@ -101,13 +106,13 @@ export function RMap<A,B,C>(map: (_:C) => B, parser: Parser<A,C>): Parser<A,B> {
 }
 
 /**
- * `Product` runs the `left` parser, and then if it succeeds, runs the `right` parser.
+ * `Cartesian` runs the `left` parser, and then if it succeeds, runs the `right` parser.
  * The `left` and `right` parsers can be different types.
  * 
  * This allows the results of two parsers to be combined together into a single result.
  */
-export function Product<A,B,C>(left: Parser<A,B>, right: Parser<A,C>): Parser<A,[B,C]> {
-    return {tag: 'product', exists: cont => cont({left, right})};
+export function Cartesian<A,B,C,D>(left: Parser<A,C>, right: Parser<B,D>): Parser<[A,B], [C,D]> {
+    return {tag: 'cartesian', exists: cont => cont({left, right})};
 }
 
 // Composition - alternative
@@ -177,8 +182,8 @@ export function show<A,B>(parser: Parser<A,B>): string {
             return parser.exists(p => `OneOf('${p.oneOf}')`);
         case 'rmap':
             return parser.exists(p => `RMap(${p.map.toString().replace(/\s+/g, ' ')}, (${show(p.parser)})`);
-        case 'product':
-            return parser.exists(p => `Product(${show(p.left)}, ${show(p.right)})`);
+        case 'cartesian':
+            return parser.exists(p => `Cartesian(${show(p.left)}, ${show(p.right)})`);
         case 'compose':
             return parser.exists(p => `Compose(${show(p.left)}, ${show(p.right)})`);
         case 'either':
@@ -215,7 +220,7 @@ export function symbols<A,B>(parser: Parser<A,B>): Set<string> {
             return parser.exists(p => new Set(Array.from(p.oneOf)));
         case 'rmap':
             return parser.exists(p => symbols(p.parser));
-        case 'product':
+        case 'cartesian':
             return parser.exists(p => new Set([...symbols(p.left), ...symbols(p.right)]));
         case 'compose':
             return parser.exists(p => new Set([...symbols(p.left), ...symbols(p.right)]));
@@ -266,7 +271,7 @@ export function parse<A,B,P extends Parser<A,B>>(parser: P extends Return<A,B> ?
 export function parse<A,B,P extends Parser<A,B>>(parser: P extends OneOf<A,B> ? Parser<A,B> : never): Parse<A,string>;
 export function parse<A,B,P extends Parser<A,B>>(parser: P extends Forget<A,B> ? Parser<A,B> : never): Parse<A,B>;
 export function parse<A,B,P extends Parser<A,B>>(parser: P extends RMap<A,B> ? Parser<A,B> : never): Parse<A,B>;
-export function parse<A,B,P extends Parser<A,B>>(parser: P extends Product<A,B> ? Parser<A,B> : never): Parse<A,[Left<B>,Right<B>]>;
+export function parse<A,B,P extends Parser<A,B>>(parser: P extends Cartesian<A,B> ? Parser<A,B> : never): Parse<[Left<A>,Right<A>],[Left<B>,Right<B>]>;
 export function parse<A,B,P extends Parser<A,B>>(parser: P extends Compose<A,B> ? Parser<A,B> : never): Parse<A,B>;
 export function parse<A,B,P extends Parser<A,B>>(parser: P extends Either<A,B> ? Parser<A,B> : never): Parse<A,B>;
 export function parse<A,B,P extends Parser<A,B>>(parser: P extends Fix<A,B> ? Parser<A,B> : never): Parse<A,B>;
@@ -322,16 +327,19 @@ export function parse<A,B>(parser: Parser<A,B>): Parse<A,B|undefined|null|string
                     return Result((r.result !== undefined) ? p.map(r.result) : undefined, r.cs, r.pos, r.errors);
                 };
             });
-        case 'product':
+        case 'cartesian':
             return parser.exists(p => {
                 const ep = parse(p.left);
                 const eq = parse(p.right);
                 return state => {
-                    const left = ep(state)
+                    if (!Array.isArray(state.attr) || state.attr.length < 2) {
+                        throw "this should never happen";
+                    }
+                    const left = ep({...state, attr: state.attr[0]})
                     if (left.result === undefined) {
                         return Result(undefined, left.cs, left.pos, left.errors);
                     }
-                    const right = eq({...left, attr: state.attr});
+                    const right = eq({...left, attr: state.attr[1]});
                     return Result((right.result !== undefined) ? [left.result, right.result] : undefined, right.cs, right.pos, left.errors.concat(right.errors));
                 };
             });
@@ -467,21 +475,25 @@ export function choice<A,B>(...ps: Array<Parser<A,B>>): Parser<A,B> {
  */
 // deno-lint-ignore no-explicit-any
 export function apply<A,B,C extends (_:B) => any>(fa: Parser<A,C>, xa: Parser<A,B>): Parser<A,C extends (_:B) => infer D ? D : never> {
-    return RMap(([f, x]) => f(x), Product(fa, xa));
+    return LMap(x => tuple(x,x), RMap(([f, x]) => f(x), Cartesian(fa, xa)));
+}
+
+export function product<A,B,C,D>(f: Parser<A,B>, g: Parser<C,D>): Parser<A&C, [B,D]> { 
+    return LMap(x => tuple(x,x), Cartesian(f, g));
 }
 
 /**
  * `first` applies both parsers, but only returns the result of the first.
  */
-export function first<A,B,C>(fx: Parser<A,B>, fy: Parser<A,C>): Parser<A,B> {
-    return apply(RMap((x:B) => (_:C) => x, fx), fy);
+export function first<A,B,C,D>(fx: Parser<A,B>, fy: Parser<C,D>): Parser<A&C,B> {
+    return RMap(([x,_]:[B,D]) => x, product(fx, fy));
 }
 
 /**
  * `second` applies both parsers, but only returns the result of the second.
  */
-export function second<A,B,C>(fx: Parser<A,B>, fy: Parser<A,C>): Parser<A,C> {
-    return apply(RMap((_:B) => (y:C) => y, fx), fy);
+export function second<A,B,C,D>(fx: Parser<A, B>, fy: Parser<C,D>): Parser<A&C,D> {
+    return RMap(([_,y]:[B,D]) => y, product(fx, fy));
 }
 
 //const listCons = <A>(t: A) => (ts: List<A>) => ts.unshift(t)
@@ -521,30 +533,29 @@ export function parens<A,B>(p:Parser<A,B>): Parser<A,B> {
 /**
  * `spaces` succeeds if there are one or more spaces, otherwise fails
  */
-// deno-lint-ignore no-explicit-any
-export const spaces: Parser<any, string[]> = many1(OneOf('\n\r\t '));
+export function spaces<A>(): Parser<A, string[]> {
+    return many1(OneOf('\n\r\t '));
+}
 
 /**
  * `optSpaces` accepts zero or more spaces, always succeeds.
  */
-// deno-lint-ignore no-explicit-any
-export const optSpaces: Parser<any, string[]> = many(OneOf('\n\r\t '));
+export function optSpaces<A>(): Parser<A, string[]> {
+    return many(OneOf('\n\r\t '));
+}
 
 /**
  * `string` matches string `s` or fails.
  */
-// deno-lint-ignore no-explicit-any
-export function string(s: string): Parser<any, string> {
-    // deno-lint-ignore no-explicit-any
-    return RMap(cs => cs.join(''), Array.from(s).reduceRight((cs, c) => apply(RMap(arrayCons, OneOf(c)), cs), Return<any, string[]>(_ => [])));
+export function string<A>(s: string): Parser<A, string> {
+    return RMap(cs => cs.join(''), Array.from(s).reduceRight((cs, c) => apply(RMap(arrayCons, OneOf(c)), cs), Return<A, string[]>(_ => [])));
 }
 
-// deno-lint-ignore no-explicit-any
-export function except(x: string): Parser<any, string> {
+export function except<A>(x: string): Parser<A, string> {
     return OneOf([...Array.from(Array(65536).keys(), y => String.fromCharCode(y))].filter(c => x.indexOf(c) < 0).join(''));
 }
 
-export function quotedString<A>(): Parser<A,string> {
+export function quotedString<A>(): Parser<A, string> {
     return token(between(string('"'), string('"'), except('"')));
 }
 
@@ -552,7 +563,11 @@ export function quotedString<A>(): Parser<A,string> {
  * `string` matches string `token` and consumes any trailing spaces, or fails.
  */
 export function token<A,B>(tok: Parser<A,B>): Parser<A,B> {
-    return first(tok, optSpaces);
+    return first(tok, optSpaces());
+}
+
+export function strtok<A>(x: string): Parser<A,string> {
+    return first(string<A>(x), optSpaces<A>());
 }
 
 // deno-lint-ignore no-explicit-any

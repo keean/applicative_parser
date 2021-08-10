@@ -1,5 +1,5 @@
 import {assertEquals} from './test_deps.ts';
-import {Error, tuple, string, parse, Fail, Empty, OneOf, Return, RMap, Product, many, many1, between, symbols, show, token, integer, float, sexpr, LMap, First, constant, Result, trap} from './parser.ts';
+import {Error, tuple, string, parse, Fail, Empty, OneOf, Return, RMap, product, many, many1, between, symbols, show, token, integer, float, sexpr, LMap, First, constant, Result, trap} from './parser.ts';
 
 const empty = {cs: '', pos: 0, attr: {}};
 const text = {cs: 'a b ab aa bb c', pos: 0, attr: {}};
@@ -61,19 +61,19 @@ Deno.test('fmap parser', () => {
 
 Deno.test('product parser', () => {
     assertEquals(
-        parse(Product(token(string('a')), token(string('b'))))(text),
+        parse(product(token(string('a')), token(string('b'))))(text),
         Result(['a', 'b'], 'a b ab aa bb c', 4, [])
     );
     assertEquals(
-        parse(Product(token(string('b')), token(string('b'))))(text),
+        parse(product(token(string('b')), token(string('b'))))(text),
         Result(undefined, 'a b ab aa bb c', 0, [Error('expected one of "b"', 0)])
     );
     assertEquals(
-        parse(Product(token(string('a')), token(string('a'))))(text),
+        parse(product(token(string('a')), token(string('a'))))(text),
         Result(undefined, 'a b ab aa bb c', 2, [Error('expected one of "a"', 2)])
     );
     assertEquals(
-        parse(Product(token(string('b')), token(string('a'))))(text),
+        parse(product(token(string('b')), token(string('a'))))(text),
         Result(undefined, 'a b ab aa bb c', 0, [Error('expected one of "b"', 0)])
     );
 });
@@ -223,7 +223,7 @@ Deno.test('symbol extraction', () => {
 Deno.test('show parser', () => { 
     assertEquals(
         show(many1(trap(OneOf('a'), OneOf('b')))),
-        "RMap(([f, x]) => f(x), (Product(RMap((t) => (ts) => [t, ...ts], (Either(Try(OneOf('a')), OneOf('b'))), Fix(Either(Try(RMap(([f, x]) => f(x), (Product(RMap((t) => (ts) => [t, ...ts], (Either(Try(OneOf('a')), OneOf('b'))), Fail('')))), Return(_ => [])))))"
+        "LMap(x => tuple(x, x), (RMap(([f, x]) => f(x), (Cartesian(RMap((t) => (ts) => [t, ...ts], (Either(Try(OneOf('a')), OneOf('b'))), Fix(Either(Try(LMap(x => tuple(x, x), (RMap(([f, x]) => f(x), (Cartesian(RMap((t) => (ts) => [t, ...ts], (Either(Try(OneOf('a')), OneOf('b'))), Fail(''))))), Return(_ => []))))))"
     );
 });
 
