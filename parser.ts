@@ -6,8 +6,8 @@
 //// deno-lint-ignore no-explicit-any
 type Top = unknown;
 
-type Left<A> = A extends [infer B, infer C] ? B : never;
-type Right<A> = A extends [infer B, infer C] ? C : never;
+type Fst<A> = A extends [infer B, infer C] ? B : never;
+type Snd<A> = A extends [infer B, infer C] ? C : never;
 
 
 
@@ -18,14 +18,14 @@ type OneOf<A,B> = {tag: 'oneOf', exists: <R>(cont: (_: {oneOf: string}) => R) =>
 type Return<A,B> = {tag: 'return', exists: <R>(cont: (_: {result: (_:A) => B}) => R) => R};
 type Forget<A,B> = {tag: 'forget', exists: <R>(cont: (_: {forget: Parser<A,B>}) => R) => R};
 type RMap<A,B> = {tag: 'rmap', exists: <R>(cont: <C>(_: {map: (_:C) => B, parser: Parser<A,C>}) => R) => R};
-type Cartesian<A,B> = {tag: 'cartesian', exists: <R>(cont: (_: {left: Parser<Left<A>,Left<B>>, right: Parser<Right<A>,Right<B>>}) => R) => R};
+type Cartesian<A,B> = {tag: 'cartesian', exists: <R>(cont: (_: {first: Parser<Fst<A>,Fst<B>>, second: Parser<Snd<A>,Snd<B>>}) => R) => R};
 type Either<A,B> = {tag: 'either', exists: <R>(cont: (_: {left: Parser<A,B>, right: Parser<A,B>}) => R) => R};
 type Fix<A,B> = {tag: 'fix', exists: <R>(cont: (_: {f: (_:Parser<A,B>) => Parser<A,B>}) => R) => R};
 type Raw<A,B> = {tag: 'raw', exists: <R>(cont: (_: {f: Parse<A,B>}) => R) => R};
 type LMap<A,B> = {tag: 'lmap', exists: <R>(cont: <C>(_: {map: (_a:A) => C, parser: Parser<C,B>}) => R) => R};
 type Compose<A,B> = {tag: 'compose', exists: <R>(cont: <C>(_: {left: Parser<A,C>, right: Parser<C,B>}) => R) => R};
-type First<A,B> = {tag: 'first', exists: <R>(cont: (_: {parser: Parser<Left<A>, Left<B>>}) => R) => R};
-type Second<A,B> = {tag: 'second', exists: <R>(cont: (_: {parser: Parser<Right<A>, Right<B>>}) => R) => R};
+type First<A,B> = {tag: 'first', exists: <R>(cont: (_: {parser: Parser<Fst<A>, Fst<B>>}) => R) => R};
+type Second<A,B> = {tag: 'second', exists: <R>(cont: (_: {parser: Parser<Snd<A>, Snd<B>>}) => R) => R};
 
 /**
  * `Parser<A>` is the type of a parser combinator that returns a value with generic type `A`.
@@ -37,15 +37,15 @@ export type Parser<A,B> =
     | OneOf<A,B>
     | Return<A,B>
     | Forget<A,B>
-    | RMap<A,B>
-    | Cartesian<A,B> 
     | Either<A,B>
-    | Fix<A,B>
-    | Raw<A,B>
     | LMap<A,B>
-    | Compose<A,B>
+    | RMap<A,B>
     | First<A,B>
     | Second<A,B>
+    | Cartesian<A,B>
+    | Compose<A,B>
+    | Fix<A,B>
+    | Raw<A,B>
     ;
 
 // Primitive parsers
@@ -106,20 +106,20 @@ export function RMap<A,B,C>(map: (_:C) => B, parser: Parser<A,C>): Parser<A,B> {
 }
 
 /**
- * `Cartesian` runs the `left` parser, and then if it succeeds, runs the `right` parser.
- * The `left` and `right` parsers can be different types.
+ * `Cartesian` runs the `first` parser, and then if it succeeds, runs the `second` parser.
+ * The `first` and `second` parsers can be different types.
  * 
  * This allows the results of two parsers to be combined together into a single result.
  */
-export function Cartesian<A,B,C,D>(left: Parser<A,C>, right: Parser<B,D>): Parser<[A,B], [C,D]> {
-    return {tag: 'cartesian', exists: cont => cont({left, right})};
+export function Cartesian<A,B,C,D>(first: Parser<A,C>, second: Parser<B,D>): Parser<[A,B], [C,D]> {
+    return {tag: 'cartesian', exists: cont => cont({first, second})};
 }
 
 // Composition - alternative
 
 /**
- * `Either` runs the `left` parser, and then if it fails, runs the `right` parser.
- * The `left` and `right` parsers must be the same type.
+ * `Either` runs the `first` parser, and then if it fails, runs the `second` parser.
+ * The `first` and `second` parsers must be the same type.
  */
 export function Either<A,B>(left: Parser<A,B>, right: Parser<A,B>): Parser<A,B> {
     return {tag: 'either', exists: cont => cont({left, right})};
@@ -183,7 +183,7 @@ export function show<A,B>(parser: Parser<A,B>): string {
         case 'rmap':
             return parser.exists(p => `RMap(${p.map.toString().replace(/\s+/g, ' ')}, (${show(p.parser)})`);
         case 'cartesian':
-            return parser.exists(p => `Cartesian(${show(p.left)}, ${show(p.right)})`);
+            return parser.exists(p => `Cartesian(${show(p.first)}, ${show(p.second)})`);
         case 'compose':
             return parser.exists(p => `Compose(${show(p.left)}, ${show(p.right)})`);
         case 'either':
@@ -221,7 +221,7 @@ export function symbols<A,B>(parser: Parser<A,B>): Set<string> {
         case 'rmap':
             return parser.exists(p => symbols(p.parser));
         case 'cartesian':
-            return parser.exists(p => new Set([...symbols(p.left), ...symbols(p.right)]));
+            return parser.exists(p => new Set([...symbols(p.first), ...symbols(p.second)]));
         case 'compose':
             return parser.exists(p => new Set([...symbols(p.left), ...symbols(p.right)]));
         case 'either':
@@ -271,20 +271,20 @@ export function parse<A,B,P extends Parser<A,B>>(parser: P extends Return<A,B> ?
 export function parse<A,B,P extends Parser<A,B>>(parser: P extends OneOf<A,B> ? Parser<A,B> : never): Parse<A,string>;
 export function parse<A,B,P extends Parser<A,B>>(parser: P extends Forget<A,B> ? Parser<A,B> : never): Parse<A,B>;
 export function parse<A,B,P extends Parser<A,B>>(parser: P extends RMap<A,B> ? Parser<A,B> : never): Parse<A,B>;
-export function parse<A,B,P extends Parser<A,B>>(parser: P extends Cartesian<A,B> ? Parser<A,B> : never): Parse<[Left<A>,Right<A>],[Left<B>,Right<B>]>;
+export function parse<A,B,P extends Parser<A,B>>(parser: P extends Cartesian<A,B> ? Parser<A,B> : never): Parse<[Fst<A>,Snd<A>],[Fst<B>,Snd<B>]>;
 export function parse<A,B,P extends Parser<A,B>>(parser: P extends Compose<A,B> ? Parser<A,B> : never): Parse<A,B>;
 export function parse<A,B,P extends Parser<A,B>>(parser: P extends Either<A,B> ? Parser<A,B> : never): Parse<A,B>;
 export function parse<A,B,P extends Parser<A,B>>(parser: P extends Fix<A,B> ? Parser<A,B> : never): Parse<A,B>;
 export function parse<A,B,P extends Parser<A,B>>(parser: P extends Raw<A,B> ? Parser<A,B> : never): Parse<A,B>;
 export function parse<A,B,P extends Parser<A,B>>(parser: P extends LMap<A,B> ? Parser<A,B> : never): Parse<A,B>;
-export function parse<A,B,P extends Parser<A,B>>(parser: P extends First<A,B> ? Parser<A,B> : never): Parse<[Left<A>,Right<A>],[Left<B>, Right<B>]>;
-export function parse<A,B,P extends Parser<A,B>>(parser: P extends Second<A,B> ? Parser<A,B> : never): Parse<[Left<A>,Right<A>],[Left<B>, Right<B>]>;
+export function parse<A,B,P extends Parser<A,B>>(parser: P extends First<A,B> ? Parser<A,B> : never): Parse<[Fst<A>,Snd<A>],[Fst<B>, Snd<B>]>;
+export function parse<A,B,P extends Parser<A,B>>(parser: P extends Second<A,B> ? Parser<A,B> : never): Parse<[Fst<A>,Snd<A>],[Fst<B>, Snd<B>]>;
 /**
  * `parse` takes a statis parser-combinator Abstract Syntax Tree as its only argument, and compiles it
  * to a parser from input string and position, to parse result, input string, and position.
  * see `Parse` type for the details of the type of the resulting parser. 
  */
-export function parse<A,B>(parser: Parser<A,B>): Parse<A,B|undefined|null|string|[Left<B>,Right<B>]> {
+export function parse<A,B>(parser: Parser<A,B>): Parse<A,B|undefined|null|string|[Fst<B>,Snd<B>]> {
     switch (parser.tag) {
         case 'fail':
             return parser.exists(p => ({cs, pos}) => 
@@ -329,18 +329,18 @@ export function parse<A,B>(parser: Parser<A,B>): Parse<A,B|undefined|null|string
             });
         case 'cartesian':
             return parser.exists(p => {
-                const ep = parse(p.left);
-                const eq = parse(p.right);
+                const ep = parse(p.first);
+                const eq = parse(p.second);
                 return state => {
                     if (!Array.isArray(state.attr) || state.attr.length < 2) {
                         throw "this should never happen";
                     }
-                    const left = ep({...state, attr: state.attr[0]})
-                    if (left.result === undefined) {
-                        return Result(undefined, left.cs, left.pos, left.errors);
+                    const first = ep({...state, attr: state.attr[0]})
+                    if (first.result === undefined) {
+                        return Result(undefined, first.cs, first.pos, first.errors);
                     }
-                    const right = eq({...left, attr: state.attr[1]});
-                    return Result((right.result !== undefined) ? [left.result, right.result] : undefined, right.cs, right.pos, left.errors.concat(right.errors));
+                    const second = eq({...first, attr: state.attr[1]});
+                    return Result((second.result !== undefined) ? [first.result, second.result] : undefined, second.cs, second.pos, first.errors.concat(second.errors));
                 };
             });
         case 'compose':
