@@ -366,7 +366,7 @@ export function parse<A,B>(parser: Parser<A,B>): Parse<A,B|undefined|null|string
                         return left;
                     }
                     const right = eq(state);
-                    return (right.result === undefined)
+                    return (right.result === undefined && right.pos === state.pos)
                         ? Result(right.result, right.cs, right.pos, left.errors.concat(right.errors))
                         : right;
                 };
@@ -451,15 +451,17 @@ export function trap<A,B>(left: Parser<A,B>, right: Parser<A,B>): Parser<A,B> {
     return Either(Try(left), right);
 }
 
-export function branch<A,B>(...ps: Array<Parser<A,B>>): Parser<A,B> {
-    return ps.reduceRight((acc, x) => Either(x, acc), Fail(''));
+export function branch<A,B>(...ps: [...Parser<A,B>[], Parser<A,B>]): Parser<A,B> {
+    const p = ps.pop();
+    return (p !== undefined) ? ps.reduceRight((acc, x) => Either(x, acc), p) : Fail('empty branch');
 }
 
 /**
  * `choice` tries each parser in turn, returning the first success, or failing if none succeed.
  */
-export function choice<A,B>(...ps: Array<Parser<A,B>>): Parser<A,B> {
-    return ps.reduceRight((acc, x) => trap(x, acc), Fail(''));
+export function choice<A,B>(...ps: [...Parser<A,B>[], Parser<A,B>]): Parser<A,B> {
+    const p = ps.pop();
+    return (p !== undefined) ? ps.reduceRight((acc, x) => trap(x, acc), p) : Fail('empty choice');
 }
 
 // Infix operators, not implementable in typescript, use prefix forms:
